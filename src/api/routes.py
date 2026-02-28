@@ -47,6 +47,10 @@ def spot_ticker_price():
 def spot_klines():
     return spot_handler.get_klines(request.args)
 
+@app.route('/api/v3/trades', methods=['GET'])
+def spot_trades():
+    return spot_handler.get_trades(request.args)
+
 
 
 # Futures API routes
@@ -88,3 +92,7 @@ def futures_ticker_price():
 @app.route('/fapi/v1/klines', methods=['GET'])
 def futures_klines():
     return futures_handler.get_klines(request.args)
+
+@app.route('/fapi/v1/trades', methods=['GET'])
+def futures_trades():
+    return futures_handler.get_trades(request.args)

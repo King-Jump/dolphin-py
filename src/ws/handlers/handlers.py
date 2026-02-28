@@ -1,19 +1,34 @@
 import asyncio
 import json
 import time
-from src.engine.orderbook.orderbook import OrderBook
+from src.engine.matching.matching import global_engine
 
 class WebSocketHandler:
-    def __init__(self):
-        self.orderbook = OrderBook()
+    def __init__(self, symbols):
+        self.symbols = symbols
         # support small size of web sockets
         self.client_max_size = 3
         self.clients = []
+        self.subscriptions = {}
+        self.depth_update_size = 30
+
+        # Start update tasks
+        asyncio.create_task(self.send_depth_updates())
+        asyncio.create_task(self.send_trade_updates())
     
     async def handle_connection(self, websocket, path):
         if len(self.clients) >= self.client_max_size:
-            self.clients.pop()
-            self.clients.append(websocket)
+            ws, _ = self.clients.pop(0)
+            try:
+                ws.close()
+            except:
+                pass
+
+            if ws in self.subscriptions:
+                del self.subscriptions[ws]
+
+        self.clients.append((websocket, time.time()))
+
         try:
             # Parse subscription request
             async for message in websocket:
@@ -24,67 +39,78 @@ class WebSocketHandler:
         except Exception as e:
             print(f"WebSocket error: {e}")
         finally:
-            self.clients.remove(websocket)
+            for i, (ws, _) in enumerate(self.clients):
+                if ws == websocket:
+                    self.clients.pop(i)
+                    break
+            if websocket in self.subscriptions:
+                del self.subscriptions[websocket]
     
     async def handle_subscription(self, websocket, params):
         for param in params:
             if 'depth' in param:
                 symbol = param.split('@')[0]
-                await self.send_depth_updates(websocket, symbol)
-            elif 'ticker' in param:
+                if symbol not in self.symbols:
+                    continue
+                if websocket not in self.subscriptions:
+                    self.subscriptions[websocket] = {'depth': set[str](), 'trade': set[str]()}
+                self.subscriptions[websocket]['depth'].add(symbol)
+            elif 'aggTrade' in param:
                 symbol = param.split('@')[0]
-                await self.send_ticker_updates(websocket, symbol)
+                if symbol not in self.symbols:
+                    continue
+                if websocket not in self.subscriptions:
+                    self.subscriptions[websocket] = {'depth': set[str](), 'trade': set[str]()}
+                self.subscriptions[websocket]['trade'].add(symbol)
     
-    async def send_depth_updates(self, websocket, symbol):
-        while websocket in self.clients:
-            try:
-                depth = self.orderbook.get_depth(symbol, 30)
-                update = {
-                    "e": "depthUpdate",
-                    "E": int(time.time() * 1000),
-                    "s": symbol,
-                    "U": depth.get('lastUpdateId', 0),
-                    "u": depth.get('lastUpdateId', 0),
-                    "b": depth.get('bids', []),
-                    "a": depth.get('asks', [])
-                }
-                await websocket.send(json.dumps(update))
-                await asyncio.sleep(0.2)  # 5 times/second
-            except Exception as e:
-                print("Error sending depth update: %s", e)
-                break
-    
-    async def send_ticker_updates(self, websocket, symbol):
-        while websocket in self.clients:
-            try:
-                ticker = self.orderbook.get_ticker(symbol)
-                update = {
-                    "e": "24hrTicker",
-                    "E": int(time.time() * 1000),
-                    "s": symbol,
-                    "p": "0.0",
-                    "P": "0.0",
-                    "w": str(ticker.get('price', 0)),
-                    "x": str(ticker.get('price', 0)),
-                    "c": str(ticker.get('price', 0)),
-                    "Q": "0.0",
-                    "b": str(ticker.get('price', 0)),
-                    "B": "0.0",
-                    "a": str(ticker.get('price', 0)),
-                    "A": "0.0",
-                    "o": "0.0",
-                    "h": "0.0",
-                    "l": "0.0",
-                    "v": "0.0",
-                    "q": "0.0",
-                    "O": 0,
-                    "C": int(time.time() * 1000),
-                    "F": 0,
-                    "L": 0,
-                    "n": 0
-                }
-                await websocket.send(json.dumps(update))
-                await asyncio.sleep(1)  # 1 time/second
-            except Exception as e:
-                print(f"Error sending ticker update: {e}")
-                break
+    async def send_depth_updates(self):
+        while 1:
+            cached_order_book = {}
+            for websocket, _ in self.clients:
+                if websocket in self.subscriptions:
+                    for symbol in self.subscriptions[websocket]['depth']:
+                        try:
+                            if symbol not in cached_order_book:
+                                depth = global_engine.get_order_book_data(symbol, self.depth_update_size)
+                                update = {
+                                    "e": "depthUpdate",
+                                    "E": int(time.time() * 1000),
+                                    "s": symbol,
+                                    "b": depth.bids,
+                                    "a": depth.asks
+                                }
+                                cached_order_book[symbol] = update
+                            update = cached_order_book[symbol]
+                            await websocket.send(json.dumps(update))
+                        except Exception as e:
+                            print(f"Error sending depth update: {e}")
+
+            await asyncio.sleep(0.2)  # 5 times/second
+
+    async def send_trade_updates(self):
+        last_trade_update_ts = 0
+        while 1:
+            cached_trade = {}
+            for websocket, _ in self.clients:
+                if websocket in self.subscriptions:
+                    for symbol in self.subscriptions[websocket]['trade']:
+                        try:
+                            if symbol not in cached_trade:
+                                trades = global_engine.get_trades(symbol)
+                                updates = [{
+                                    "e": "aggTrade",
+                                    "E": int(time.time() * 1000), # event timestamp
+                                    "s": symbol,     # symbol
+                                    "p": str(trade.price),         # price
+                                    "q": str(trade.quantity),      # quantity
+                                    "C": trade.timestamp,          # trade timestamp
+                                } for trade in trades if trade.timestamp > last_trade_update_ts]
+                                cached_trade[symbol] = updates
+
+                            updates = cached_trade[symbol]
+                            for update in updates:
+                                await websocket.send(json.dumps(update))
+                        except Exception as e:
+                            print(f"Error sending trade update: {e}")
+            last_trade_update_ts = int(time.time() * 1000)
+            await asyncio.sleep(0.2)  # 5 times/second

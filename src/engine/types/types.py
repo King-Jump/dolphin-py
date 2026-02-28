@@ -117,7 +117,7 @@ class Ticker:
         }
 
 # Create new order
-def new_order(symbol, side, order_type, price, quantity):
+def new_order(symbol, side, order_type, quantity, price):
     return Order(symbol, side, order_type, quantity, price)
 
 # Create empty order, i.e., order not in order book

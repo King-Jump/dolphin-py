@@ -26,6 +26,26 @@ class BaseSortedCircularArray:
             return None
         return self.orders[self.head]
     
+    def peek_order(self, size) -> list[Order]:
+        orders = []
+        head, tail = self.head, self.tail
+        while head != tail:
+            orders.append(self.orders[head])
+            head = (head + 1) % self.max_size
+            if len(orders) >= size:
+                break
+        return orders[:size]
+    
+    def peek_data(self, size) -> list[tuple[float, float]]:
+        orders = []
+        head, tail = self.head, self.tail
+        while head != tail:
+            orders.append((self.orders[head].price, self.orders[head].quantity))
+            head = (head + 1) % self.max_size
+            if len(orders) >= size:
+                break
+        return orders[:size]
+
     def remove(self, order_id):
         # Linear search and remove order by order_id
         head, tail = self.head, self.tail
@@ -264,41 +284,15 @@ class OrderBook:
         with self.lock:
             return self.orders.get(order_id)
     
-    def get_order_book(self, depth=30):
+    def get_order_book(self, depth=30) -> OrderBookModel:
         with self.lock:
             order_book = OrderBookModel(self.symbol)
             
             # Build buy price levels
-            bid_map = {}
-            for order in self.bids.orders:
-                if order.status == OrderStatus.PENDING:
-                    remaining = order.quantity - order.filled_quantity
-                    if remaining > 0:
-                        if order.price in bid_map:
-                            bid_map[order.price] += remaining
-                        else:
-                            bid_map[order.price] = remaining
-            
-            # Sort by price descending
-            sorted_bids = sorted(bid_map.items(), key=lambda x: -x[0])[:depth]
-            for price, quantity in sorted_bids:
-                order_book.bids.append(OrderLevel(price, quantity))
+            order_book.bids = self.bids.peek_data(depth)
             
             # Build sell price levels
-            ask_map = {}
-            for order in self.asks.orders:
-                if order.status == OrderStatus.PENDING:
-                    remaining = order.quantity - order.filled_quantity
-                    if remaining > 0:
-                        if order.price in ask_map:
-                            ask_map[order.price] += remaining
-                        else:
-                            ask_map[order.price] = remaining
-            
-            # Sort by price ascending
-            sorted_asks = sorted(ask_map.items(), key=lambda x: x[0])[:depth]
-            for price, quantity in sorted_asks:
-                order_book.asks.append(OrderLevel(price, quantity))
+            order_book.asks = self.asks.peek_data(depth)
             
             order_book.timestamp = int(time.time() * 1000)
             return order_book
@@ -312,17 +306,3 @@ class OrderBook:
         with self.lock:
             best_ask = self.asks.peek()
             return best_ask.price if best_ask else 0
-    
-    def get_depth(self, symbol, limit=30):
-        # Simplified implementation, return mock data
-        return {
-            "lastUpdateId": int(time.time() * 1000),
-            "bids": [["59000.00", "1.0"], ["58999.00", "2.0"]],
-            "asks": [["59001.00", "1.0"], ["59002.00", "2.0"]]
-        }
-    
-    def get_ticker(self, symbol):
-        # Simplified implementation, return mock data
-        return {
-            "price": 59000.00
-        }
