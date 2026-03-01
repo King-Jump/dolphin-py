@@ -1,6 +1,6 @@
 from flask import jsonify, current_app
 import time
-from src.engine.matching.matching import MatchingEngine
+from src.engine.matching.matching import global_futures_engine
 
 # Map interval to milliseconds
 interval_map = {
@@ -10,8 +10,6 @@ interval_map = {
 }
 
 class FuturesHandler:
-    def __init__(self):
-        self.engine = MatchingEngine()
     
     def _validate_symbol(self, symbol):
         """Validate if symbol is allowed"""
@@ -24,7 +22,7 @@ class FuturesHandler:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
             
-            trades, order = self.engine.create_order(
+            trades, order = global_futures_engine.create_order(
                 symbol=symbol,
                 side=data.get('side'),
                 order_type=data.get('type'),
@@ -55,7 +53,7 @@ class FuturesHandler:
     def new_batch_order(self, data):
         try:
             params = data.get('batchOrders', [])
-            orders = self.engine.create_orders(params, is_futures=True)
+            _, orders = global_futures_engine.create_orders(params, is_futures=True)
             results = [{
                 "symbol": order.symbol,
                 "orderId": order.order_id,
@@ -83,7 +81,7 @@ class FuturesHandler:
             
             results = []
             for order_id in order_ids:
-                cancelled = self.engine.cancel_order(symbol, order_id)
+                cancelled = global_futures_engine.cancel_order(symbol, order_id)
                 if cancelled:
                     results.append({
                         "symbol": cancelled.symbol,
@@ -92,7 +90,7 @@ class FuturesHandler:
                         "transactTime": cancelled.timestamp,
                         "price": cancelled.price,
                         "origQty": cancelled.quantity,
-                        "executedQty": cancelled.executed_quantity,
+                        "executedQty": cancelled.filled_quantity,
                         "status": "CANCELED",
                         "type": cancelled.type,
                         "side": cancelled.side
@@ -109,7 +107,7 @@ class FuturesHandler:
         if symbol and not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
-        orders = self.engine.get_open_orders(symbol, is_futures=True)
+        orders = global_futures_engine.get_open_orders(symbol)
         return jsonify({
             "code": 200,
             "data": [
@@ -137,7 +135,7 @@ class FuturesHandler:
         price = args.get('price')
         quantity = args.get('quantity')
 
-        self.engine.update_klines(symbol, float(price), float(quantity))
+        global_futures_engine.update_klines(symbol, float(price), float(quantity))
         return jsonify({
             "code": 200,
             "data": {
@@ -145,7 +143,7 @@ class FuturesHandler:
                 'side': side,
                 "price": price,
                 "quantity": quantity,
-                "status": "FAILED"
+                "status": "FILLED"
             }
         })
     
@@ -155,7 +153,7 @@ class FuturesHandler:
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
         limit = int(args.get('limit', 30))
-        depth = self.engine.get_order_book(symbol).get_order_book(limit)
+        depth = global_futures_engine.get_order_book(symbol).get_order_book(limit)
         return jsonify({
             "code": 200,
             "data": {
@@ -170,11 +168,11 @@ class FuturesHandler:
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
-        ticker = self.engine.get_trades(symbol, 1)
+        ticker = global_futures_engine.get_trades(symbol, 1)
         if ticker:
             ticker = ticker[0]
         else:
-            return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
+            return jsonify({"code": 400, "msg": f"Symbol {symbol} is not traded"}), 400
         return jsonify({
             "code": 200,
             "data": {
@@ -194,7 +192,7 @@ class FuturesHandler:
             return jsonify({"code": 400, "msg": f"Interval {interval} is not traded"}), 400
         
         limit = int(args.get('limit', 50))
-        kline_data = self.engine.get_klines(symbol, interval, limit)
+        kline_data = global_futures_engine.get_klines(symbol, interval, limit)
                 
         klines = [{
                 "ot": bar[0],                  # Open time
@@ -218,7 +216,7 @@ class FuturesHandler:
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
         limit = int(args.get('limit', 50))
-        trades = self.engine.get_trades(symbol, limit)
+        trades = global_futures_engine.get_trades(symbol, limit)
         return jsonify({
             "code": 200,
             "data": [

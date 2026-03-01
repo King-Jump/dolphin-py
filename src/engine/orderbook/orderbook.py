@@ -36,11 +36,17 @@ class BaseSortedCircularArray:
                 break
         return orders[:size]
     
-    def peek_data(self, size) -> list[tuple[float, float]]:
+    def peek_depth(self, size) -> list[tuple[float, float]]:
         orders = []
         head, tail = self.head, self.tail
         while head != tail:
-            orders.append((self.orders[head].price, self.orders[head].quantity))
+            order = self.orders[head]
+            if order is None:
+                break
+            if not orders or order.price != orders[-1][0]:
+                orders.append((order.price, order.quantity - order.filled_quantity))
+            else:
+                orders[-1] = (order.price, orders[-1][1] + order.quantity - order.filled_quantity)
             head = (head + 1) % self.max_size
             if len(orders) >= size:
                 break
@@ -289,10 +295,10 @@ class OrderBook:
             order_book = OrderBookModel(self.symbol)
             
             # Build buy price levels
-            order_book.bids = self.bids.peek_data(depth)
+            order_book.bids = self.bids.peek_depth(depth)
             
             # Build sell price levels
-            order_book.asks = self.asks.peek_data(depth)
+            order_book.asks = self.asks.peek_depth(depth)
             
             order_book.timestamp = int(time.time() * 1000)
             return order_book

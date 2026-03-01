@@ -1,3 +1,4 @@
+import logging
 from src.engine.orderbook.orderbook import OrderBook
 from src.engine.types.types import (
     Order,
@@ -6,6 +7,8 @@ from src.engine.types.types import (
 import threading
 import traceback
 import time
+
+logger = logging.getLogger(__name__)
 
 class MatchingEngine:
     def __init__(self):
@@ -16,9 +19,6 @@ class MatchingEngine:
         # WebSocket clients for trade updates
         self.ws_clients = []
 
-        self.prev_kline_update_minute = 0
-        self.prev_kline_update_hour = 0
-        self.prev_kline_update_day = 0
         self.max_kline_size = 200
         self.klines = {}
     
@@ -42,7 +42,6 @@ class MatchingEngine:
         # Store trades and notify WebSocket clients
         if trades:
             self._store_trades(order.symbol, trades)
-            self._notify_ws_clients(order.symbol, trades)
         
         return trades
     
@@ -240,14 +239,15 @@ class MatchingEngine:
         return order_book.get_order_book(depth)
     
     def create_order(self, symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):        
-        print(f"create_order called with: symbol={symbol}, side={side}, order_type={order_type}, quantity={quantity}, price={price}, client_order_id={client_order_id}, is_futures={is_futures}")
+        logger.debug(f"create_order called with: symbol={symbol}, side={side}, order_type={order_type}, quantity={quantity}, price={price}, client_order_id={client_order_id}, is_futures={is_futures}")
         try:
-            print(f"About to create Order with order_type={order_type}")
+            logger.debug(f"About to create Order with order_type={order_type}")
             # Let's try calling with positional arguments instead
             order = Order(symbol, side, order_type, quantity, price, client_order_id, is_futures)
-            print(f"Order created successfully: {order.order_id}")
+            logger.debug(f"Order created successfully: {order.order_id}")
         except Exception as e:
-            print(f"Error creating order: {e}")
+            import traceback
+            logger.debug(f"Error creating order: {e}")
             traceback.print_exc()
             raise
         
@@ -256,13 +256,13 @@ class MatchingEngine:
         
     def create_orders(self, params, is_futures=False):
         # batch create orders
-        print(f"Creating orders with params: {params}")
+        logger.debug(f"Creating orders with params: {params}")
         buy_orders = [Order(
                 symbol=param.get('symbol'),
                 side=param.get('side'),
                 order_type=param.get('type'),
-                quantity=param.get('quantity'),
-                price=param.get('price'),
+                quantity=float(param.get('quantity')),
+                price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
             ) for param in params if param.get('side') == OrderSide.BUY]
         buy_orders.sort(key=lambda x: x.price, reverse=True)
@@ -271,8 +271,8 @@ class MatchingEngine:
                 symbol=param.get('symbol'),
                 side=param.get('side'),
                 order_type=param.get('type'),
-                quantity=param.get('quantity'),
-                price=param.get('price'),
+                quantity=float(param.get('quantity')),
+                price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
             ) for param in params if param.get('side') == OrderSide.SELL]
         sell_orders.sort(key=lambda x: x.price)
@@ -348,11 +348,16 @@ class MatchingEngine:
                 '1m': [],
                 '1h': [],
                 '1d': [],
+                'prev_update_minute': 0,
+                'prev_update_hour': 0,
+                'prev_update_day': 0,
             }
         
         klines = self.klines[symbol]
         minute = time.time() // 60
-        if self.prev_kline_update_minute != minute:
+        logger.debug(f"Updating klines for {symbol} at minute={minute}, prev_update_minute={klines['prev_update_minute']}")
+        logger.debug(f"previous klines: {klines['1m']}")
+        if klines['prev_update_minute'] != minute:
             ts = int(time.time() * 1000)
             klines['1m'].append([
                 ts,      # Open time
@@ -375,9 +380,11 @@ class MatchingEngine:
             latest_bar[4] = price  # Close price
             latest_bar[5] += quantity  # Volume
             latest_bar[7] += quantity * price  # Quote asset volume
+        logger.debug(f"updated klines: {klines['1m']}")
 
         hour = minute // 60
-        if self.prev_kline_update_hour == hour:
+        logger.debug(f"Updating klines for {symbol} at hour={hour}, prev_update_hour={klines['prev_update_hour']}")
+        if klines['prev_update_hour'] == hour:
             # update latest bar
             latest_bar = klines['1h'][-1]
             latest_bar[2] = max(price, latest_bar[2])  # High price
@@ -403,7 +410,8 @@ class MatchingEngine:
 
 
         day = hour // 24
-        if self.prev_kline_update_day == day:
+        logger.debug(f"Updating klines for {symbol} at day={day}, prev_update_day={klines['prev_update_day']}")
+        if klines['prev_update_day'] == day:
             # update latest bar
             latest_bar = klines['1d'][-1]
             latest_bar[2] = max(price, latest_bar[2])  # High price
@@ -427,9 +435,9 @@ class MatchingEngine:
             if len(klines['1d']) > self.max_kline_size * 1.2:
                 klines['1d'] = klines['1d'][-self.max_kline_size:]
         
-        self.prev_kline_update_minute = minute
-        self.prev_kline_update_hour = hour
-        self.prev_kline_update_day = day
+        klines['prev_update_minute'] = minute
+        klines['prev_update_hour'] = hour
+        klines['prev_update_day'] = day
 
     def get_klines(self, symbol, interval, limit=50):
         with self.lock:
@@ -438,4 +446,5 @@ class MatchingEngine:
             return self.klines[symbol][interval][-limit:]
 
 # Global trading engine instance
-global_engine = MatchingEngine()
+global_spot_engine = MatchingEngine()
+global_futures_engine = MatchingEngine()

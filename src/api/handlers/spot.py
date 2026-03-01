@@ -1,6 +1,10 @@
+import logging
 from flask import jsonify, current_app
 import time
-from src.engine.matching.matching import MatchingEngine
+from src.engine.matching.matching import global_spot_engine
+import traceback
+
+logger = logging.getLogger(__name__)
 
 # Map interval to milliseconds
 interval_map = {
@@ -10,9 +14,6 @@ interval_map = {
 }
 
 class SpotHandler:
-    def __init__(self):
-        self.engine = MatchingEngine()
-    
     def _validate_symbol(self, symbol):
         """Validate if symbol is allowed"""
         allowed_symbols = current_app.config.get('ALLOWED_SYMBOLS', ['BTCUSDT'])
@@ -21,18 +22,18 @@ class SpotHandler:
     def new_order(self, data):
         """ Process new order, first check if it can be matched, add to order book if not fully filled """
         try:
-            print(f"New order data: {data}")
+            logger.debug(f"New order data: {data}")
             symbol = data.get('symbol')
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
             
-            print(f"Calling create_order with order_type={data.get('type')}")
-            trades, order = self.engine.create_order(
+            logger.debug(f"Calling create_order with order_type={data.get('type')}")
+            trades, order = global_spot_engine.create_order(
                 symbol=symbol,
                 side=data.get('side'),
                 order_type=data.get('type'),
                 quantity=float(data.get('quantity')),
-                price=float(data.get('price')) if data.get('price') else None,
+                price=float(data.get('price')) if data.get('price') else 0,
                 client_order_id=data.get('client_order_id')
             )
             if order:
@@ -54,7 +55,7 @@ class SpotHandler:
             return jsonify({"code": 400, "msg": "Failed to create order"}), 400
         except Exception as e:
             import traceback
-            print(f"Error in new_order: {e}")
+            logger.debug(f"Error in new_order: {e}")
             traceback.print_exc()
             return jsonify({"code": 500, "msg": str(e)}), 500
     
@@ -63,7 +64,7 @@ class SpotHandler:
             params = data.get('batchOrders', [])
             results = []
             
-            orders = self.engine.create_orders(params)
+            _, orders = global_spot_engine.create_orders(params)
             results = [{
                 "symbol": order.symbol,
                 "orderId": order.order_id,
@@ -81,6 +82,7 @@ class SpotHandler:
                 "data": results
             })
         except Exception as e:
+            traceback.print_exc()
             return jsonify({"code": 500, "msg": str(e)}), 500
     
     def cancel_orders(self, symbol, order_ids):
@@ -88,7 +90,7 @@ class SpotHandler:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
             
-            results = self.engine.cancel_orders(symbol, order_ids)
+            results = global_spot_engine.cancel_orders(symbol, order_ids)
             return jsonify([{
                     "symbol": cancelled.symbol,
                     "orderId": cancelled.order_id,
@@ -106,12 +108,12 @@ class SpotHandler:
     
     def open_orders(self, args):
         symbol = args.get('symbol')
-        print(f"open_orders symbol: {symbol}")
+        logger.debug(f"open_orders symbol: {symbol}")
         if symbol and not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
-        orders = self.engine.get_open_orders(symbol)
-        print(f"open_orders: {orders}")
+        orders = global_spot_engine.get_open_orders(symbol)
+        logger.debug(f"open_orders: {orders}")
         return jsonify({
             "code": 200,
             "data": [
@@ -139,7 +141,7 @@ class SpotHandler:
         price = args.get('price')
         quantity = args.get('quantity')
 
-        self.engine.update_klines(symbol, float(price), float(quantity))
+        global_spot_engine.update_klines(symbol, float(price), float(quantity))
         return jsonify({
             "code": 200,
             "data": {
@@ -157,7 +159,7 @@ class SpotHandler:
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
         limit = int(args.get('limit', 30))
-        depth = self.engine.get_order_book(symbol).get_order_book(limit)
+        depth = global_spot_engine.get_order_book(symbol).get_order_book(limit)
         return jsonify({
             "code": 200,
             "data": {
@@ -166,13 +168,13 @@ class SpotHandler:
                 "asks": depth.asks
             }
         })
-    
+        
     def get_ticker_price(self, args):
         symbol = args.get('symbol', 'BTCUSDT')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
-        ticker = self.engine.get_trades(symbol, 1)
+        ticker = global_spot_engine.get_trades(symbol, 1)
         if ticker:
             ticker = ticker[0]
         else:
@@ -196,7 +198,7 @@ class SpotHandler:
             return jsonify({"code": 400, "msg": f"Interval {interval} is not allowed"}), 400
         
         limit = int(args.get('limit', 50))
-        kline_data = self.engine.get_klines(symbol, interval, limit)
+        kline_data = global_spot_engine.get_klines(symbol, interval, limit)
                 
         klines = [{
                 "ot": bar[0],                  # Open time
@@ -220,7 +222,7 @@ class SpotHandler:
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
         
         limit = int(args.get('limit', 50))
-        trades = self.engine.get_trades(symbol, limit)
+        trades = global_spot_engine.get_trades(symbol, limit)
         return jsonify({
             "code": 200,
             "data": [

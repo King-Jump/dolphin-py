@@ -31,7 +31,7 @@ def test_spot_public_api():
                 "limit": 5
             })
             data = response.json().get('data', [])
-            print(f"{symbol} {interval}: {response.status_code} - {len(data)} klines")
+            print(f"{symbol} {interval}: {response.status_code} - {data}")
     
     # Test 4: Get trades
     print("\n4. Testing trades...")
@@ -41,7 +41,7 @@ def test_spot_public_api():
             "limit": 10
         })
         data = response.json().get('data', [])
-        print(f"{symbol}: {response.status_code} - {len(data)} trades")
+        print(f"{symbol}: {response.status_code} - {data}")
     
     # Test 5: Test error handling for invalid symbol
     print("\n5. Testing error handling for invalid symbol...")

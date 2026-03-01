@@ -45,7 +45,7 @@ def test_spot_private_api():
     # Test 3: Get open orders
     print("\n3. Testing get open orders...")
     response = requests.get(f"{BASE_URL}/api/v3/openOrders?symbol=BTCUSDT")
-    print(f"Open orders: {response.status_code} - {len(response.json().get('data', []))} open orders")
+    print(f"Open orders: {response.status_code} - {response.json().get('data', [])}")
     
     # Test 4: Cancel orders (need order IDs from previous response)
     print("\n4. Testing cancel orders...")
@@ -94,7 +94,7 @@ def test_spot_private_api():
         ]
     }
     response = requests.post(f"{BASE_URL}/api/v3/batchOrders", json=batch_data)
-    print(f"Self trade: {response.status_code} - {len(response.json().get('data', []))} orders created")
+    print(f"Self trade: {response.status_code} - {response.json().get('data', [])}")
 
 if __name__ == "__main__":
     test_spot_private_api()
