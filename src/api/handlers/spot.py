@@ -91,7 +91,9 @@ class SpotHandler:
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
             
             results = global_spot_engine.cancel_orders(symbol, order_ids)
-            return jsonify([{
+            return jsonify({
+                "code": 200,
+                "data": [{
                     "symbol": cancelled.symbol,
                     "orderId": cancelled.order_id,
                     "clientOrderId": cancelled.client_order_id,
@@ -102,7 +104,8 @@ class SpotHandler:
                     "status": cancelled.status,
                     "type": cancelled.type,
                     "side": cancelled.side
-                } for cancelled in results])
+                } for cancelled in results]
+            })
         except Exception as e:
             return jsonify({"code": 500, "msg": str(e)}), 500
     
