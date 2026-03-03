@@ -14,7 +14,8 @@ def test_spot_private_api():
         "side": "BUY",
         "type": "LIMIT",
         "quantity": "1.0",
-        "price": "59000.0"
+        "price": "59000.0",
+        "client_order_id": "ttttt"
     }
     response = requests.post(f"{BASE_URL}/api/v3/order", json=order_data)
     print(f"New order: {response.status_code} - {response.json()}")
@@ -28,19 +29,23 @@ def test_spot_private_api():
                 "side": "BUY",
                 "type": "LIMIT",
                 "quantity": "10.0",
-                "price": "3500.0"
+                "price": "3500.0",
+                "client_order_id": "ttttt-sssss"
             },
             {
                 "symbol": "ETHUSDT",
                 "side": "SELL",
                 "type": "LIMIT",
                 "quantity": "5.0",
-                "price": "3600.0"
+                "price": "3600.0",
+                "client_order_id": "ttttt-uuuuuu"
             }
         ]
     }
     response = requests.post(f"{BASE_URL}/api/v3/batchOrders", json=batch_data)
     print(f"Batch orders: {response.status_code} - {len(response.json().get('data', []))} orders created")
+    for order in response.json().get('data', []):
+        print(f"Order ID: {order['orderId']}, Client Order ID: {order['clientOrderId']}")
     
     # Test 3: Get open orders
     print("\n3. Testing get open orders...")

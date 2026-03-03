@@ -27,7 +27,7 @@ class SpotHandler:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
             
-            logger.debug(f"Calling create_order with order_type={data.get('type')}")
+            logger.debug(f"Calling create_order with order_type={data.get('type')}, client_order_id={data.get('client_order_id')}")
             trades, order = global_spot_engine.create_order(
                 symbol=symbol,
                 side=data.get('side'),

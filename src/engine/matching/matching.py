@@ -244,7 +244,7 @@ class MatchingEngine:
             logger.debug(f"About to create Order with order_type={order_type}")
             # Let's try calling with positional arguments instead
             order = Order(symbol, side, order_type, quantity, price, client_order_id, is_futures)
-            logger.debug(f"Order created successfully: {order.order_id}")
+            logger.debug(f"Order created successfully: {order.order_id} - {order.client_order_id}")
         except Exception as e:
             import traceback
             logger.debug(f"Error creating order: {e}")
@@ -259,6 +259,7 @@ class MatchingEngine:
         logger.debug(f"Creating orders with params: {params}")
         buy_orders = [Order(
                 symbol=param.get('symbol'),
+                client_order_id=param.get('client_order_id') or str(uuid.uuid4()),
                 side=param.get('side'),
                 order_type=param.get('type'),
                 quantity=float(param.get('quantity')),
