@@ -270,6 +270,7 @@ class MatchingEngine:
 
         sell_orders = [Order(
                 symbol=param.get('symbol'),
+                client_order_id=param.get('client_order_id') or str(uuid.uuid4()),
                 side=param.get('side'),
                 order_type=param.get('type'),
                 quantity=float(param.get('quantity')),
