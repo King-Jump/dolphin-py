@@ -33,7 +33,7 @@ export function useWebSocket(symbol: string | null) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      const sub = symbol.toLowerCase();
+      const sub = symbol.toUpperCase();
       ws.send(
         JSON.stringify({
           method: 'SUBSCRIBE',
