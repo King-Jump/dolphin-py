@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DepthLevel } from '../types/api';
 
-const WS_BASE = `ws://3.1.221.68:8765/spot`;
+const WS_BASE = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8765/spot`;
 
 export interface DepthUpdate {
   e: 'depthUpdate';
