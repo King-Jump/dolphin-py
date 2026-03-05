@@ -4,6 +4,7 @@ import { KlineChart } from './components/KlineChart';
 import { OrderBook } from './components/OrderBook';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { DepthLevel, KlineBar } from './types/api';
+import { sortBids, sortAsks, mergeDepth } from './utils/orderBook';
 
 const SYMBOL = 'BTCUSDT';
 const INTERVALS = ['1m', '1h', '1d'] as const;
@@ -92,7 +93,7 @@ export default function App() {
       .then(([k, d, t]) => {
         if (cancelled) return;
         setKlines(k);
-        setDepth({ bids: d.bids, asks: d.asks });
+        setDepth({ bids: sortBids(d.bids ?? []), asks: sortAsks(d.asks ?? []) });
         setTickerPrice(t.price);
       })
       .catch((e) => {
@@ -107,11 +108,10 @@ export default function App() {
   }, [interval]);
 
   useEffect(() => {
-    if (wsDepth.bids.length || wsDepth.asks.length) {
-      setDepth((prev) => ({
-        bids: wsDepth.bids.length ? wsDepth.bids : prev.bids,
-        asks: wsDepth.asks.length ? wsDepth.asks : prev.asks,
-      }));
+    if (wsDepth.bids.length > 0 || wsDepth.asks.length > 0) {
+      setDepth((prev) =>
+        mergeDepth(prev.bids, prev.asks, wsDepth.bids, wsDepth.asks)
+      );
     }
   }, [wsDepth]);
 

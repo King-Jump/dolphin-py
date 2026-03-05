@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DepthLevel } from '../types/api';
+import { sortBids, sortAsks } from '../utils/orderBook';
 
 const BID_COLOR = '#0ecb81';
 const ASK_COLOR = '#f6465d';
@@ -7,11 +8,12 @@ const BG = '#0b0e11';
 const ROW_BG = '#161a1e';
 const TEXT = '#eaecef';
 const TEXT_MUTED = '#848e9c';
+const MONO_FONT = 'ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace';
 
 function formatNum(s: string, decimals: number): string {
   const n = parseFloat(s);
   if (Number.isNaN(n)) return '—';
-  if (n >= 1000) return n.toLocaleString('en', { maximumFractionDigits: decimals });
+  if (n >= 1000) return n.toLocaleString('en', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return Number(n.toFixed(decimals)).toString();
 }
 
@@ -40,20 +42,19 @@ function depthRows(
           zIndex: 1,
         }}
       >
-        <span style={{ textAlign: 'right', color }}>{formatNum(price, priceDecimals)}</span>
-        <span style={{ textAlign: 'right', color: TEXT }}>{formatNum(amount, amountDecimals)}</span>
-        <span style={{ textAlign: 'right', color: TEXT_MUTED }}>{formatNum(String(total), 2)}</span>
-        {/* 深度条从中间往两侧展开：卖盘从右往左，买盘从左往右 */}
+        <span style={{ textAlign: 'right', color, fontFamily: MONO_FONT }}>{formatNum(price, 2)}</span>
+        <span style={{ textAlign: 'right', color: TEXT, fontFamily: MONO_FONT }}>{formatNum(amount, amountDecimals)}</span>
+        <span style={{ textAlign: 'right', color: TEXT_MUTED, fontFamily: MONO_FONT }}>{formatNum(String(total), 2)}</span>
+        {/* 深度条：卖盘从右往左，买盘从右往左（右侧对齐） */}
         <div
           style={{
             position: 'absolute',
             top: 0,
-            left: side === 'bid' ? 0 : undefined,
-            right: side === 'ask' ? 0 : undefined,
+            left: undefined,
+            right: 0,
             bottom: 0,
             width: `${pct}%`,
-            marginLeft: side === 'ask' ? 'auto' : undefined,
-            marginRight: side === 'bid' ? 'auto' : undefined,
+            marginLeft: 'auto',
             backgroundColor: side === 'bid' ? 'rgba(14, 203, 129, 0.08)' : 'rgba(246, 70, 93, 0.08)',
             zIndex: 0,
             pointerEvents: 'none',
@@ -83,8 +84,8 @@ export function OrderBook({
   maxRows = 15,
   style,
 }: OrderBookProps) {
-  const bidSlice = bids.slice(0, maxRows);
-  const askSlice = asks.slice(0, maxRows);
+  const bidSlice = sortBids(bids).slice(0, maxRows);
+  const askSlice = sortAsks(asks).slice(0, maxRows);
 
   let maxTotal = 0;
   let run = 0;
@@ -107,6 +108,7 @@ export function OrderBook({
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
+        fontFamily: MONO_FONT,
         ...style,
       }}
     >
@@ -132,7 +134,7 @@ export function OrderBook({
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: 'auto',
+          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-end',
@@ -154,12 +156,12 @@ export function OrderBook({
             flexShrink: 0,
           }}
         >
-          {formatNum(lastPrice, priceDecimals)}
+          {formatNum(lastPrice, 2)}
         </div>
       )}
 
       {/* 下：买盘，价格从高到低，最佳买（最高买价）在顶部紧贴中间 */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {depthRows(bidSlice, 'bid', maxTotal, priceDecimals, amountDecimals)}
       </div>
     </div>
