@@ -11,6 +11,12 @@ const SYMBOL = 'BTCUSDT';
 const INTERVALS = ['1m', '1h', '1d'] as const;
 const KLINE_LIMIT = 300;
 
+const INTERVAL_MS: Record<(typeof INTERVALS)[number], number> = {
+  '1m': 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '1d': 24 * 60 * 60 * 1000,
+};
+
 const PAGE_STYLE: React.CSSProperties = {
   width: '100%',
   height: '100%',
@@ -121,6 +127,43 @@ export default function App() {
   useEffect(() => {
     if (lastTrade?.price) setTickerPrice(lastTrade.price);
   }, [lastTrade]);
+
+  // 根据成交推送实时更新 K 线：命中已有 bar 则更新 h/l/c/v，否则若进入新周期则追加新 bar
+  useEffect(() => {
+    if (!lastTrade || !klines.length) return;
+    const intervalMs = INTERVAL_MS[interval];
+    const t = lastTrade.time < 1e12 ? lastTrade.time * 1000 : lastTrade.time;
+    const price = parseFloat(lastTrade.price);
+    const qty = parseFloat(lastTrade.qty);
+    if (Number.isNaN(price) || Number.isNaN(qty)) return;
+    setKlines((prev) => {
+      const idx = prev.findIndex((b) => t >= b.ot && t < b.ot + intervalMs);
+      if (idx !== -1) {
+        const bar = prev[idx];
+        const newH = String(Math.max(parseFloat(bar.h), price));
+        const newL = String(Math.min(parseFloat(bar.l), price));
+        const newV = String(parseFloat(bar.v) + qty);
+        const next = [...prev];
+        next[idx] = { ...bar, h: newH, l: newL, c: lastTrade.price, v: newV };
+        return next;
+      }
+      const lastBar = prev[prev.length - 1];
+      if (t < lastBar.ot + intervalMs) return prev;
+      const newOt = Math.floor(t / intervalMs) * intervalMs;
+      const newBar: KlineBar = {
+        ot: newOt,
+        o: lastTrade.price,
+        h: lastTrade.price,
+        l: lastTrade.price,
+        c: lastTrade.price,
+        v: lastTrade.qty,
+        ct: newOt + intervalMs - 1,
+        a: '',
+      };
+      const next = [...prev, newBar];
+      return next.length > KLINE_LIMIT ? next.slice(-KLINE_LIMIT) : next;
+    });
+  }, [lastTrade, interval]);
 
   const displayPrice = tickerPrice ?? (klines.length ? klines[klines.length - 1].c : '—');
 
