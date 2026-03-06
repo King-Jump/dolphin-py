@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { fetchDepth, fetchKlines, fetchTickerPrice } from './api/client';
 import { KlineChart } from './components/KlineChart';
+import { LatestTrades } from './components/LatestTrades';
 import { OrderBook } from './components/OrderBook';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { DepthLevel, KlineBar } from './types/api';
-import { sortBids, sortAsks, mergeDepth } from './utils/orderBook';
+import { sortBids, sortAsks } from './utils/orderBook';
 
 const SYMBOL = 'BTCUSDT';
 const INTERVALS = ['1m', '1h', '1d'] as const;
@@ -26,9 +27,10 @@ const HEADER_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 24,
-  padding: '12px 24px',
-  borderBottom: '1px solid #2b3139',
+  padding: '10px 20px',
+  borderBottom: '1px solid #3d4552',
   flexWrap: 'wrap',
+  background: '#0b0e11',
 };
 
 const LAYOUT_STYLE: React.CSSProperties = {
@@ -45,30 +47,33 @@ const CHART_PANEL_STYLE: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
-  borderRight: '1px solid #2b3139',
+  borderRight: '1px solid #3d4552',
   minHeight: 0,
   flex: 1,
 };
 
 const TICKER_STYLE: React.CSSProperties = {
-  fontSize: 24,
-  fontWeight: 700,
+  fontSize: 22,
+  fontWeight: 600,
   color: '#eaecef',
+  letterSpacing: '-0.02em',
 };
 
 const SYMBOL_STYLE: React.CSSProperties = {
-  fontSize: 14,
+  fontSize: 12,
   color: '#848e9c',
+  marginBottom: 2,
 };
 
 const INTERVAL_BTN = (active: boolean): React.CSSProperties => ({
-  padding: '6px 12px',
+  padding: '5px 10px',
   fontSize: 12,
-  border: '1px solid #2b3139',
+  border: '1px solid #3d4552',
   borderRadius: 4,
   background: active ? '#2b3139' : 'transparent',
   color: active ? '#f0b90b' : '#848e9c',
   cursor: 'pointer',
+  fontWeight: 500,
 });
 
 export default function App() {
@@ -79,7 +84,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { depth: wsDepth, lastTrade } = useWebSocket(SYMBOL);
+  const { depth: wsDepth, lastTrade, recentTrades } = useWebSocket(SYMBOL);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,9 +114,7 @@ export default function App() {
 
   useEffect(() => {
     if (wsDepth.bids.length > 0 || wsDepth.asks.length > 0) {
-      setDepth((prev) =>
-        mergeDepth(prev.bids, prev.asks, wsDepth.bids, wsDepth.asks)
-      );
+      setDepth({ bids: wsDepth.bids, asks: wsDepth.asks });
     }
   }, [wsDepth]);
 
@@ -143,7 +146,7 @@ export default function App() {
       </header>
 
       {error && (
-        <div style={{ padding: 16, background: '#3d1f1f', color: '#f6465d' }}>
+        <div style={{ padding: '10px 20px', fontSize: 13, background: 'rgba(246, 70, 93, 0.12)', color: '#f6465d', borderBottom: '1px solid #3d4552' }}>
           网络错误，请重试
         </div>
       )}
@@ -151,7 +154,7 @@ export default function App() {
       <div style={LAYOUT_STYLE}>
         <div style={CHART_PANEL_STYLE}>
           {loading && !klines.length ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#848e9c' }}>加载 K 线中…</div>
+            <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#848e9c' }}>加载 K 线中…</div>
           ) : (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <KlineChart data={klines} />
@@ -160,24 +163,38 @@ export default function App() {
         </div>
         <div
           style={{
-            padding: 16,
+            padding: '12px 16px',
             minWidth: 280,
             height: '100%',
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
+            gap: 12,
+            background: '#0b0e11',
+            borderLeft: '1px solid #3d4552',
           }}
         >
-          <div style={{ fontSize: 12, color: '#848e9c', marginBottom: 8, flexShrink: 0 }}>盘口深度</div>
-          <OrderBook
-            bids={depth.bids}
-            asks={depth.asks}
-            lastPrice={displayPrice}
-            priceDecimals={2}
-            amountDecimals={4}
-            maxRows={15}
-            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
-          />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 12, color: '#ffffff', marginBottom: 6, flexShrink: 0, fontWeight: 500 }}>订单薄</div>
+            <OrderBook
+              bids={depth.bids}
+              asks={depth.asks}
+              lastPrice={displayPrice}
+              priceDecimals={2}
+              amountDecimals={4}
+              style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            />
+          </div>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 12, color: '#ffffff', marginBottom: 6, flexShrink: 0, fontWeight: 500 }}>最新成交</div>
+            <LatestTrades
+              trades={recentTrades}
+              priceDecimals={2}
+              amountDecimals={4}
+              maxRows={20}
+              style={{ flex: 1, minHeight: 0 }}
+            />
+          </div>
         </div>
       </div>
     </div>

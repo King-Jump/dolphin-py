@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DepthLevel } from '../types/api';
-import { mergeDepth, sortBids, sortAsks } from '../utils/orderBook';
+import { sortBids, sortAsks } from '../utils/orderBook';
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//3.1.221.68:8765/spot`;
 
@@ -19,9 +19,18 @@ export interface TradeUpdate {
   C: number;
 }
 
+const RECENT_TRADES_MAX = 20;
+
+export interface TradeItem {
+  price: string;
+  qty: string;
+  time: number;
+}
+
 export function useWebSocket(symbol: string | null) {
   const [depth, setDepth] = useState<{ bids: DepthLevel[]; asks: DepthLevel[] }>({ bids: [], asks: [] });
-  const [lastTrade, setLastTrade] = useState<{ price: string; qty: string } | null>(null);
+  const [lastTrade, setLastTrade] = useState<TradeItem | null>(null);
+  const [recentTrades, setRecentTrades] = useState<TradeItem[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const symbolRef = useRef(symbol);
 
@@ -52,16 +61,14 @@ export function useWebSocket(symbol: string | null) {
           if (payload.s?.toUpperCase() !== symbolRef.current?.toUpperCase()) return;
           const b = payload.b ?? [];
           const a = payload.a ?? [];
-          // 全量快照（档位较多）直接替换并排序；否则按增量合并
-          if (b.length >= 10 || a.length >= 10) {
-            setDepth({ bids: sortBids(b), asks: sortAsks(a) });
-          } else {
-            setDepth((prev) => mergeDepth(prev.bids, prev.asks, b, a));
-          }
+          // WS 推送为有限档位全量快照，直接替换
+          setDepth({ bids: sortBids(b), asks: sortAsks(a) });
         } else if (msg.e === 'trade') {
           const payload = msg as TradeUpdate;
           if (payload.s?.toUpperCase() === symbolRef.current?.toUpperCase()) {
-            setLastTrade({ price: payload.p, qty: payload.q });
+            const item: TradeItem = { price: payload.p, qty: payload.q, time: payload.C ?? Date.now() };
+            setLastTrade(item);
+            setRecentTrades((prev) => [item, ...prev].slice(0, RECENT_TRADES_MAX));
           }
         }
       } catch {
@@ -77,8 +84,9 @@ export function useWebSocket(symbol: string | null) {
       wsRef.current = null;
       setDepth({ bids: [], asks: [] });
       setLastTrade(null);
+      setRecentTrades([]);
     };
   }, [symbol]);
 
-  return { depth, lastTrade };
+  return { depth, lastTrade, recentTrades };
 }

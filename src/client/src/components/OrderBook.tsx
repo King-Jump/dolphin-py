@@ -1,13 +1,25 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { DepthLevel } from '../types/api';
 import { sortBids, sortAsks } from '../utils/orderBook';
 
+const ROW_HEIGHT_PX = 20;
+const HEADER_HEIGHT_PX = 28;
+const CURRENT_PRICE_HEIGHT_PX = 32;
+
+function calcMaxRowsFromHeight(containerHeight: number, hasCurrentPrice: boolean): number {
+  const fixed = HEADER_HEIGHT_PX + (hasCurrentPrice ? CURRENT_PRICE_HEIGHT_PX : 0);
+  const forOneSide = (containerHeight - fixed) / 2;
+  const rows = Math.floor(forOneSide / ROW_HEIGHT_PX);
+  return Math.max(1, rows);
+}
+
 const BID_COLOR = '#0ecb81';
 const ASK_COLOR = '#f6465d';
-const BG = '#0b0e11';
-const ROW_BG = '#161a1e';
+const BG = '#161a1e';
+const ROW_BG = '#3d4552';
 const TEXT = '#eaecef';
 const TEXT_MUTED = '#848e9c';
+const HEADER_TEXT = '#848e9c';
 const MONO_FONT = 'ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace';
 
 function formatNum(s: string, decimals: number): string {
@@ -35,9 +47,9 @@ function depthRows(
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 8,
-          padding: '4px 12px',
-          fontSize: 13,
+          gap: 6,
+          padding: '2px 10px',
+          fontSize: 12,
           position: 'relative',
           zIndex: 1,
         }}
@@ -55,7 +67,7 @@ function depthRows(
             bottom: 0,
             width: `${pct}%`,
             marginLeft: 'auto',
-            backgroundColor: side === 'bid' ? 'rgba(14, 203, 129, 0.08)' : 'rgba(246, 70, 93, 0.08)',
+            backgroundColor: side === 'bid' ? 'rgba(14, 203, 129, 0.12)' : 'rgba(246, 70, 93, 0.12)',
             zIndex: 0,
             pointerEvents: 'none',
           }}
@@ -81,9 +93,31 @@ export function OrderBook({
   lastPrice,
   priceDecimals = 2,
   amountDecimals = 4,
-  maxRows = 15,
+  maxRows: maxRowsProp,
   style,
 }: OrderBookProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [maxRows, setMaxRows] = useState(() =>
+    typeof maxRowsProp === 'number' ? maxRowsProp : 10
+  );
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { height } = entries[0]?.contentRect ?? { height: 0 };
+      const hasPrice =
+        lastPrice != null && lastPrice !== '' && !Number.isNaN(parseFloat(lastPrice));
+      setMaxRows(calcMaxRowsFromHeight(height, hasPrice));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [lastPrice]);
+
+  useEffect(() => {
+    if (typeof maxRowsProp === 'number') setMaxRows(maxRowsProp);
+  }, [maxRowsProp]);
+
   const bidSlice = sortBids(bids).slice(0, maxRows);
   const askSlice = sortAsks(asks).slice(0, maxRows);
 
@@ -101,9 +135,10 @@ export function OrderBook({
 
   return (
     <div
+      ref={containerRef}
       style={{
         background: BG,
-        borderRadius: 8,
+        borderRadius: 4,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -116,10 +151,10 @@ export function OrderBook({
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 8,
-          padding: '10px 12px',
-          fontSize: 12,
-          color: TEXT_MUTED,
+          gap: 6,
+          padding: '6px 10px',
+          fontSize: 11,
+          color: HEADER_TEXT,
           borderBottom: `1px solid ${ROW_BG}`,
           flexShrink: 0,
         }}
@@ -146,11 +181,12 @@ export function OrderBook({
       {lastPrice != null && lastPrice !== '' && !Number.isNaN(parseFloat(lastPrice)) && (
         <div
           style={{
-            padding: '8px 12px',
-            fontSize: 18,
+            padding: '6px 10px',
+            fontSize: 16,
             fontWeight: 600,
             textAlign: 'center',
             color: TEXT,
+            background: 'rgba(43, 49, 57, 0.5)',
             borderTop: `1px solid ${ROW_BG}`,
             borderBottom: `1px solid ${ROW_BG}`,
             flexShrink: 0,

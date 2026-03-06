@@ -9,9 +9,25 @@ import {
 import React, { useEffect, useRef } from 'react';
 import type { KlineBar } from '../types/api';
 
+/** 将后端返回的 UTC 时间戳(ms) 转为图表用“本地时间轴”时间(秒)，使时间轴显示为本地时间 */
+function utcToLocalTimeStamp(utcMs: number): number {
+  const d = new Date(utcMs);
+  return (
+    Date.UTC(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate(),
+      d.getHours(),
+      d.getMinutes(),
+      d.getSeconds(),
+      d.getMilliseconds()
+    ) / 1000
+  );
+}
+
 function barToCandlestick(bar: KlineBar): CandlestickData {
   return {
-    time: Math.floor(bar.ot / 1000) as UTCTimestamp,
+    time: utcToLocalTimeStamp(bar.ot) as UTCTimestamp,
     open: parseFloat(bar.o),
     high: parseFloat(bar.h),
     low: parseFloat(bar.l),
@@ -23,7 +39,7 @@ function barToVolume(bar: KlineBar): HistogramData {
   const o = parseFloat(bar.o);
   const c = parseFloat(bar.c);
   return {
-    time: Math.floor(bar.ot / 1000) as UTCTimestamp,
+    time: utcToLocalTimeStamp(bar.ot) as UTCTimestamp,
     value: parseFloat(bar.v),
     color: c >= o ? 'rgba(0, 177, 128, 0.5)' : 'rgba(246, 61, 85, 0.5)',
   };
