@@ -234,6 +234,10 @@ class MatchingEngine:
             order = empty_order(order_id, symbol)
         return order
     
+    def get_order(self, symbol, order_id):
+        order_book = self.get_order_book(symbol)
+        return order_book.get_order(order_id)
+    
     def get_order_book_data(self, symbol, depth=30):
         order_book = self.get_order_book(symbol)
         return order_book.get_order_book(depth)
@@ -259,7 +263,7 @@ class MatchingEngine:
         logger.debug(f"Creating orders with params: {params}")
         buy_orders = [Order(
                 symbol=param.get('symbol'),
-                client_order_id=param.get('client_order_id') or str(uuid.uuid4()),
+                client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
                 side=param.get('side'),
                 order_type=param.get('type'),
                 quantity=float(param.get('quantity')),
@@ -270,7 +274,7 @@ class MatchingEngine:
 
         sell_orders = [Order(
                 symbol=param.get('symbol'),
-                client_order_id=param.get('client_order_id') or str(uuid.uuid4()),
+                client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
                 side=param.get('side'),
                 order_type=param.get('type'),
                 quantity=float(param.get('quantity')),
@@ -343,6 +347,19 @@ class MatchingEngine:
                 return []
             return self.trades[symbol][-limit:]
 
+    def append_trade(self, symbol, price, quantity):
+        if symbol not in self.trades:
+            self.trades[symbol] = []
+        trade = new_trade(
+            symbol,
+            price,
+            quantity,
+            int(time.time() * 1000),
+            int(time.time() * 1000)
+        )
+        with self.lock:
+            self.trades[symbol].append(trade)
+        
     def update_klines(self, symbol, price, quantity):
         # Update klines for the given symbol with the latest trade price and quantity
         if symbol not in self.klines:

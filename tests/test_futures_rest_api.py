@@ -117,11 +117,41 @@ def test_futures_rest_api():
     print("\n7.5 Testing mock trade...")
     mock_data = {
         "symbol": "JPMUSDT",
+        "side": "BUY",
         "price": "59000.0",
         "quantity": "0.5"
     }
     response = requests.post(f"{BASE_URL}/fapi/v3/mock", json=mock_data)
     print(f"Mock trade: {response.status_code} - {response.json()}")
+    
+    # Test 7.6: Get order status
+    print("\n7.6 Testing get order status...")
+    # First create an order to get its orderId
+    order_data = {
+        "symbol": "BTCUSDT",
+        "side": "BUY",
+        "type": "LIMIT",
+        "quantity": "0.5",
+        "price": "59000.0",
+        "client_order_id": "test_order_status"
+    }
+    response = requests.post(f"{BASE_URL}/fapi/v1/order", json=order_data)
+    if response.status_code == 200:
+        order_id = response.json().get('data', {}).get('orderId')
+        if order_id:
+            response = requests.get(f"{BASE_URL}/fapi/v1/order", params={
+                "symbol": "BTCUSDT",
+                "orderId": order_id
+            })
+            print(f"Order status: {response.status_code} - {response.json()}")
+    
+    # Test 7.7: Get order status with non-existent order
+    print("\n7.7 Testing get order status with non-existent order...")
+    response = requests.get(f"{BASE_URL}/fapi/v1/order", params={
+        "symbol": "BTCUSDT",
+        "orderId": "999999999"
+    })
+    print(f"Non-existent order status: {response.status_code} - {response.json()}")
     
     print("\nFutures RESTful API tests completed!")
 

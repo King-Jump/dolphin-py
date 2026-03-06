@@ -134,7 +134,10 @@ class FuturesHandler:
         side = args.get('side')
         price = args.get('price')
         quantity = args.get('quantity')
+        if not side or not price or not quantity:
+            return jsonify({'code': 500, 'data': "invalid parameter"})
 
+        global_futures_engine.append_trade(symbol, float(price), float(quantity))
         global_futures_engine.update_klines(symbol, float(price), float(quantity))
         return jsonify({
             "code": 200,
@@ -229,4 +232,35 @@ class FuturesHandler:
                 }
                 for trade in trades
             ]
+        })
+    
+    def order_status(self, args):
+        symbol = args.get('symbol')
+        order_id = args.get('orderId')
+        
+        if not symbol:
+            return jsonify({"code": 400, "msg": "Symbol is required"}), 400
+        if not order_id:
+            return jsonify({"code": 400, "msg": "orderId is required"}), 400
+        
+        if not self._validate_symbol(symbol):
+            return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
+        
+        order = global_futures_engine.get_order(symbol, order_id)
+        if not order:
+            return jsonify({"code": 404, "msg": "Order not found"}), 404
+        
+        return jsonify({
+            "code": 200,
+            "data": {
+                "symbol": order.symbol,
+                "orderId": order.order_id,
+                "clientOrderId": order.client_order_id,
+                "price": order.price,
+                "origQty": order.quantity,
+                "executedQty": order.filled_quantity,
+                "status": order.status,
+                "type": order.type,
+                "side": order.side
+            }
         })

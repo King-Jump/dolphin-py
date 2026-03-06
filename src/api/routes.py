@@ -29,6 +29,11 @@ def spot_cancel_order():
 def spot_open_orders():
     return spot_handler.open_orders(request.args)
 
+@app.route('/api/v3/order', methods=['GET'])
+@local_only
+def spot_order_status():
+    return spot_handler.order_status(request.args)
+
 @app.route('/api/v3/mock', methods=['POST'])
 @local_only
 def spot_mock_trade():
@@ -74,6 +79,11 @@ def futures_cancel_orders():
 @local_only
 def futures_open_orders():
     return futures_handler.open_orders(request.args)
+
+@app.route('/fapi/v1/order', methods=['GET'])
+@local_only
+def futures_order_status():
+    return futures_handler.order_status(request.args)
 
 @app.route('/fapi/v3/mock', methods=['POST'])
 @local_only

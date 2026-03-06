@@ -70,6 +70,7 @@ def test_spot_private_api():
     print("\n5. Testing mock trade...")
     mock_data = {
         "symbol": "BTCUSDT",
+        "side": "BUY",
         "price": "59000.0",
         "quantity": "0.5"
     }
@@ -100,6 +101,35 @@ def test_spot_private_api():
     }
     response = requests.post(f"{BASE_URL}/api/v3/batchOrders", json=batch_data)
     print(f"Self trade: {response.status_code} - {response.json().get('data', [])}")
+    
+    # Test 7: Get order status
+    print("\n7. Testing get order status...")
+    # First create an order to get its orderId
+    order_data = {
+        "symbol": "BTCUSDT",
+        "side": "BUY",
+        "type": "LIMIT",
+        "quantity": "0.5",
+        "price": "59000.0",
+        "client_order_id": "test_order_status"
+    }
+    response = requests.post(f"{BASE_URL}/api/v3/order", json=order_data)
+    if response.status_code == 200:
+        order_id = response.json().get('data', {}).get('orderId')
+        if order_id:
+            response = requests.get(f"{BASE_URL}/api/v3/order", params={
+                "symbol": "BTCUSDT",
+                "orderId": order_id
+            })
+            print(f"Order status: {response.status_code} - {response.json()}")
+    
+    # Test 8: Get order status with non-existent order
+    print("\n8. Testing get order status with non-existent order...")
+    response = requests.get(f"{BASE_URL}/api/v3/order", params={
+        "symbol": "BTCUSDT",
+        "orderId": "999999999"
+    })
+    print(f"Non-existent order status: {response.status_code} - {response.json()}")
 
 if __name__ == "__main__":
     test_spot_private_api()
