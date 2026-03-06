@@ -1,11 +1,11 @@
 import logging
-from src.engine.orderbook.orderbook import OrderBook
+#from src.engine.orderbook.orderbook import OrderBook
+from src.engine.orderbook.rb_orderbook import OrderBook
 from src.engine.types.types import (
     Order,
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
 )
 import threading
-import traceback
 import time
 
 logger = logging.getLogger(__name__)
