@@ -9,7 +9,7 @@ import { sortBids, sortAsks } from './utils/orderBook';
 
 const SYMBOL = 'BTCUSDT';
 const INTERVALS = ['1m', '1h', '1d'] as const;
-const KLINE_LIMIT = 300;
+const KLINE_LIMIT = 250;
 
 const INTERVAL_MS: Record<(typeof INTERVALS)[number], number> = {
   '1m': 60 * 1000,
@@ -200,7 +200,7 @@ export default function App() {
             <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#848e9c' }}>加载 K 线中…</div>
           ) : (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <KlineChart data={klines} />
+              <KlineChart data={klines.slice(-KLINE_LIMIT)} />
             </div>
           )}
         </div>
