@@ -330,7 +330,7 @@ class MatchingEngine:
     
     def get_open_orders(self, symbol=None):
         order_book = self.get_order_book(symbol)
-        return order_book.asks.peek_order(10) + order_book.bids.peek_order(10)
+        return order_book.asks.peek_order(600) + order_book.bids.peek_order(600)
     
     def _store_trades(self, symbol, trades):
         with self.lock:
