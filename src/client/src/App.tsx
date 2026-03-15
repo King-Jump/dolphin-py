@@ -7,7 +7,22 @@ import { useWebSocket } from './hooks/useWebSocket';
 import type { DepthLevel, KlineBar } from './types/api';
 import { sortBids, sortAsks } from './utils/orderBook';
 
-const SYMBOL = 'BTCUSDT';
+const SYMBOLS = ['BTCUSDT', 'JPMUSDT', 'ETHUSDT'] as const;
+type SymbolType = (typeof SYMBOLS)[number];
+
+function getSymbolFromUrl(): SymbolType {
+  const params = new URLSearchParams(location.search);
+  const s = params.get('symbol')?.toUpperCase();
+  if (s && (SYMBOLS as readonly string[]).includes(s)) return s as SymbolType;
+  return 'BTCUSDT';
+}
+
+function setSymbolInUrl(symbol: SymbolType): void {
+  const url = new URL(location.href);
+  url.searchParams.set('symbol', symbol);
+  window.history.replaceState(null, '', url.pathname + url.search);
+}
+
 const INTERVALS = ['1m', '1h', '1d'] as const;
 const KLINE_LIMIT = 250;
 
@@ -32,6 +47,7 @@ const PAGE_STYLE: React.CSSProperties = {
 const HEADER_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'space-between',
   gap: 24,
   padding: '10px 20px',
   borderBottom: '1px solid #3d4552',
@@ -82,7 +98,24 @@ const INTERVAL_BTN = (active: boolean): React.CSSProperties => ({
   fontWeight: 500,
 });
 
+const SYMBOL_BTN = (active: boolean): React.CSSProperties => ({
+  padding: '5px 10px',
+  fontSize: 12,
+  border: '1px solid #3d4552',
+  borderRadius: 4,
+  background: active ? '#2b3139' : 'transparent',
+  color: active ? '#f0b90b' : '#848e9c',
+  cursor: 'pointer',
+  fontWeight: 500,
+});
+
 export default function App() {
+  const [symbol, setSymbolState] = useState<SymbolType>(getSymbolFromUrl);
+
+  const setSymbol = (s: SymbolType) => {
+    setSymbolState(s);
+    setSymbolInUrl(s);
+  };
   const [interval, setInterval] = useState<(typeof INTERVALS)[number]>('1m');
   const [klines, setKlines] = useState<KlineBar[]>([]);
   const [depth, setDepth] = useState<{ bids: DepthLevel[]; asks: DepthLevel[] }>({ bids: [], asks: [] });
@@ -90,22 +123,23 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { depth: wsDepth, lastTrade, recentTrades } = useWebSocket(SYMBOL);
+  const { depth: wsDepth, lastTrade, recentTrades } = useWebSocket(symbol);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setTickerPrice(null);
+    setKlines([]);
+    setDepth({ bids: [], asks: [] });
     Promise.all([
-      fetchKlines(SYMBOL, interval, KLINE_LIMIT),
-      fetchDepth(SYMBOL, 30),
-      fetchTickerPrice(SYMBOL),
+      fetchKlines(symbol, interval, KLINE_LIMIT),
+      fetchDepth(symbol, 30),
     ])
-      .then(([k, d, t]) => {
+      .then(([k, d]) => {
         if (cancelled) return;
         setKlines(k);
         setDepth({ bids: sortBids(d.bids ?? []), asks: sortAsks(d.asks ?? []) });
-        setTickerPrice(t.price);
       })
       .catch((e) => {
         if (!cancelled) setError(e?.message ?? '请求失败');
@@ -113,10 +147,15 @@ export default function App() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    fetchTickerPrice(symbol)
+      .then((t) => {
+        if (!cancelled) setTickerPrice(t.price);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [interval]);
+  }, [symbol, interval]);
 
   useEffect(() => {
     if (wsDepth.bids.length > 0 || wsDepth.asks.length > 0) {
@@ -170,19 +209,33 @@ export default function App() {
   return (
     <div style={PAGE_STYLE}>
       <header style={HEADER_STYLE}>
-        <div>
-          <div style={SYMBOL_STYLE}>{SYMBOL}</div>
-          <div style={TICKER_STYLE}>{displayPrice}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div>
+            <div style={SYMBOL_STYLE}>{symbol}</div>
+            <div style={TICKER_STYLE}>{displayPrice}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {INTERVALS.map((i) => (
+              <button
+                key={i}
+                style={INTERVAL_BTN(i === interval)}
+                onClick={() => setInterval(i)}
+                type="button"
+              >
+                {i === '1m' ? '1 分钟' : i === '1h' ? '1 小时' : '1 天'}
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {INTERVALS.map((i) => (
+        <div style={{ display: 'flex', gap: 6 }}>
+          {SYMBOLS.map((s) => (
             <button
-              key={i}
-              style={INTERVAL_BTN(i === interval)}
-              onClick={() => setInterval(i)}
+              key={s}
+              style={SYMBOL_BTN(s === symbol)}
+              onClick={() => setSymbol(s)}
               type="button"
             >
-              {i === '1m' ? '1 分钟' : i === '1h' ? '1 小时' : '1 天'}
+              {s}
             </button>
           ))}
         </div>
