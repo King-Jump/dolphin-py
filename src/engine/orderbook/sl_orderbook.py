@@ -3,7 +3,6 @@
     2. 远盘使用基于多维数组的链表+跳表
     3. 使用HashMap存储订单详情
 """
-from multiprocessing.spawn import old_main_modules
 import time
 import random
 import threading
@@ -81,22 +80,6 @@ class SortedBaseArray:
     def is_empty(self) -> bool:
         return self._capacity == 0
 
-    def _bisearch(self, order: Order) -> int:
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
-            if condition < 0:
-                # mid < order
-                start = mid + 1
-            elif condition > 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                self.logger.error("%s is already in the near-end array", order.order_id)
-                return -1
-        return start
-
     def delete(self, order: Order) -> bool:
         """ delete order from the array
         """
@@ -133,6 +116,26 @@ class SortedAskArray(SortedBaseArray):
     """
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
+
+    def _bisearch(self, order: Order) -> int:
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = compare(self._values[mid], order)
+            if condition < 0:
+                # mid < order
+                start = mid + 1
+            elif condition > 0:
+                # mid > order
+                end = mid - 1
+            else: # condition == 0
+                self.logger.error("%s is already in the near-end array", order.order_id)
+                return -1
+
+        if start >= self._capacity:
+            return -1
+
+        return start
 
     def insert(self, order: Order) -> bool:
         """ binary search and insert order, assert the array is not full
@@ -286,6 +289,28 @@ class SortedBidArray(SortedBaseArray):
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
 
+    def _bisearch(self, order: Order) -> int:
+        """ binary search the position to insert order
+        """
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = compare(self._values[mid], order)
+            if condition > 0:
+                # mid > order
+                start = mid + 1
+            elif condition < 0:
+                # mid < order
+                end = mid - 1
+            else: # condition == 0
+                self.logger.error("%s is already in the near-end array", order.order_id)
+                return -1
+
+        if start >= self._capacity:
+            return -1
+
+        return start
+
     def insert(self, order: Order) -> bool:
         """ binary search and insert order, assert the array is not full
         """
@@ -297,19 +322,11 @@ class SortedBidArray(SortedBaseArray):
             self._capacity += 1
             return True
 
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
-            if condition < 0:
-                # mid < order
-                start = mid + 1
-            elif condition > 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                self.logger.error("%s is already in the near-end array", order.order_id)
-                return False
+        start = self._bisearch(order)
+        if start == -1:
+            return False
+
+
 
         # stop when start == end
         condition = compare(self._values[start], order)
@@ -379,23 +396,23 @@ class SortedBidArray(SortedBaseArray):
             self._capacity = write_idx
             return True, far_end_orders, sub_orders
         else:
-            # insert all orders to new-end array, first sort orders in ascending order
-            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+            # insert all orders to new-end array, first sort orders in descending order
+            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
                     condition = compare(self._values[read_idx], order)
                     if condition > 0:
-                        # append order
-                        self._values[write_idx] = (order.order_id, order.price, order.timestamp)
-                        write_idx -= 1
-                        break
-                    else: # condition < 0
                         # append read idx
                         self._values[write_idx] = self._values[read_idx]
                         write_idx -= 1
                         read_idx -= 1
+                    else: # condition < 0
+                        # append order
+                        self._values[write_idx] = (order.order_id, order.price, order.timestamp)
+                        write_idx -= 1
+                        break
 
                 if read_idx < 0:
                     self._values[write_idx] = (order.order_id, order.price, order.timestamp)
@@ -435,7 +452,7 @@ class SortedBidArray(SortedBaseArray):
                 break
         self._capacity -= len(deleted_orders)
 
-        for i in range(write_idx, self._capacity):
+        for i in range(read_idx, self._capacity):
             self._values[write_idx] = self._values[i]
             write_idx += 1
 
@@ -803,23 +820,23 @@ class OrderBook:
         """批量移除订单"""
         if side == OrderSide.BUY:
             with self.bid_lock:
-                removed_ids = self.near_bids.batch_delete(order_ids)
+                removed_ids = self.near_bids.batch_delete([self.orders[oid] for oid in order_ids])
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]
                 if remained_ids:
-                    far_removed_ids = self.far_bids.batch_delete(remained_ids)
+                    far_removed_ids = self.far_bids.batch_delete([self.orders[oid] for oid in remained_ids])
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
                 return removed_ids + far_removed_ids
         else:
             with self.ask_lock:
-                removed_ids = self.near_asks.batch_delete(order_ids)
+                removed_ids = self.near_asks.batch_delete([self.orders[oid] for oid in order_ids])
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]
                 if remained_ids:
-                    far_removed_ids = self.far_asks.batch_delete(remained_ids)
+                    far_removed_ids = self.far_asks.batch_delete([self.orders[oid] for oid in remained_ids])
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
                 return removed_ids + far_removed_ids
@@ -830,12 +847,17 @@ class OrderBook:
 
     def get_order_book(self, depth=30) -> OrderBookModel:
         """获取订单簿数据"""
-        with self.ask_lock, self.bid_lock:
-            order_book = OrderBookModel(self.symbol)
-            order_book.bids = self.peek_depth(depth)
-            order_book.asks = self.peek_depth(depth)
-            order_book.timestamp = int(time.time() * 1000)
-            return order_book
+        order_book = OrderBookModel(self.symbol)
+        with self.ask_lock:
+            # TODO
+            order_book.asks = [self.orders[oid] for oid in self.near_asks.peek_depth(depth)]
+
+        with self.bid_lock:
+            # TODO
+            order_book.bids = [self.orders[oid] for oid in self.near_bids.peek_depth(depth)]
+
+        order_book.timestamp = int(time.time() * 1000)
+        return order_book
 
     def get_best_bid(self) -> float:
         """获取最佳买价"""
