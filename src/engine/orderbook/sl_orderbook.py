@@ -3,6 +3,7 @@
     2. 远盘使用基于多维数组的链表+跳表
     3. 使用HashMap存储订单详情
 """
+from multiprocessing.spawn import old_main_modules
 import time
 import random
 import threading
@@ -15,6 +16,9 @@ MAX_NEAR_SIZE = 1_000
 def compare(a: Tuple[str, float, int], b: Order) -> int:
     """ compare two orders, first by price, second by timestamp
     """
+    if a[0] == b.order_id:
+        return 0
+
     if a[1] == b.price:
         if a[2] < b.timestamp:
             return -1
@@ -23,10 +27,8 @@ def compare(a: Tuple[str, float, int], b: Order) -> int:
         else:
             if a[0] < b.order_id:
                 return -1
-            elif a[0] > b.order_id:
+            else: # a[0] > b.order_id:
                 return 1
-            else: # a[0] == b.order_id
-                return 0
     elif a[1] > b.price:
         return 1
     else: # a.price < b.price
@@ -75,6 +77,9 @@ class SortedBaseArray:
 
     def is_full(self) -> bool:
         return self._capacity >= self.max_size
+
+    def is_empty(self) -> bool:
+        return self._capacity == 0
 
     def _bisearch(self, order: Order) -> int:
         start, end = 0, self._capacity - 1
@@ -267,6 +272,11 @@ class SortedAskArray(SortedBaseArray):
             if read_idx >= self._capacity:
                 break
         self._capacity -= len(deleted_orders)
+
+        for i in range(read_idx, self._capacity):
+            self._values[write_idx] = self._values[i]
+            write_idx += 1
+
         return deleted_orders
 
 
@@ -288,7 +298,7 @@ class SortedBidArray(SortedBaseArray):
             return True
 
         start, end = 0, self._capacity - 1
-        while start < end:
+        while start <= end:
             mid = int((start + end) * 0.5)
             condition = compare(self._values[mid], order)
             if condition < 0:
@@ -424,6 +434,11 @@ class SortedBidArray(SortedBaseArray):
             if read_idx >= self._capacity:
                 break
         self._capacity -= len(deleted_orders)
+
+        for i in range(write_idx, self._capacity):
+            self._values[write_idx] = self._values[i]
+            write_idx += 1
+
         return deleted_orders
 
 
@@ -435,16 +450,16 @@ class SkipNode:
         self.index = index  # index in free_nodes list
 
 class SkipList:
-    def __init__(self, max_level=16, pN=4):
+    def __init__(self, max_level=16, pN=4, max_nodes=100_000):
         self.max_level = max_level     # 最大层数限制（防止无限增长）
         self.pN = pN                     # 向上提升的概率1/pN（通常0.5或0.25）
         self.head = SkipNode(None, max_level)  # 头节点，贯穿所有层
         self.level = 1                 # 当前跳表的有效最大层数（从1开始）
 
         self.capacity = 0   # number of nodes
-        self.max_node_size = 10_000  # max number of nodes
+        self.max_node_size = max_nodes  # max number of nodes
         self.free_nodes = [SkipNode(None, max_level, i) for i in range(self.max_node_size)]  # list of free nodes
-        self.free_nodes_ptr = list(range(1, self.max_node_size+1))
+        self.free_nodes_ptr = list(range(1, self.max_node_size))
         self.free_ptr_head = 0
 
     def size(self) -> int:
@@ -453,7 +468,7 @@ class SkipList:
     def _new_node(self, order: Order, level: int):
         if self.capacity >= self.max_node_size:
             self.free_nodes.extend([SkipNode(None, self.max_level, i+self.capacity) for i in range(self.max_node_size)])
-            self.free_nodes_ptr.extend(range(self.max_node_size+1, self.max_node_size*2+1))
+            self.free_nodes_ptr.extend(range(self.max_node_size, self.max_node_size*2))
             self.max_node_size *= 2
 
         # allocate a new node from free node list
@@ -504,17 +519,18 @@ class SkipList:
     def peek(self) -> Optional[Order]:
         """ peek the first order in the array
         """
-        if self._capacity == 0:
+        if self.capacity == 0:
             return None
         return self.head.forward[0].order
 
     def pop(self) -> Optional[Order]:
         """ pop the first order in the array
         """
-        if self._capacity == 0:
+        if self.capacity == 0:
             return None
 
-        order = self.head.forward[0].order
+        node = self.head.forward[0]
+        order = node.order
         for lvl in range(self.level):
             if self.head.forward[lvl] and self.head.forward[lvl].order.order_id == order.order_id:
                 self.head.forward[lvl] = self.head.forward[lvl].forward[lvl]
@@ -522,13 +538,13 @@ class SkipList:
         while self.level > 1 and self.head.forward[self.level - 1] is None:
             self.level -= 1
 
-        self._free_node(self.head.forward[0])
+        self._free_node(node)
         return order
 
 
 class AskSkipList(SkipList):
-    def __init__(self, max_level=16, pN=4):
-        super().__init__(max_level, pN) 
+    def __init__(self, max_level=16, pN=4, max_nodes=100_000):
+        super().__init__(max_level, pN, max_nodes) 
 
     def search(self, order: Order) -> Optional[Order]:
         """查找指定键，返回值，不存在则返回 None"""
@@ -575,7 +591,6 @@ class AskSkipList(SkipList):
             new_node.forward[lvl] = update[lvl].forward[lvl]
             update[lvl].forward[lvl] = new_node
 
-        self.order_info[order.order_id] = new_node
         return True
     
     def delete(self, order: Order) -> bool:
@@ -599,8 +614,8 @@ class AskSkipList(SkipList):
 
 
 class BidSkipList(SkipList):
-    def __init__(self, max_level=16, pN=4):
-        super().__init__(max_level, pN) 
+    def __init__(self, max_level=16, pN=4, max_nodes=100_000):
+        super().__init__(max_level, pN, max_nodes) 
 
     def search(self, order: Order) -> Optional[Order]:
         """查找指定键，返回值，不存在则返回 None"""
@@ -647,7 +662,6 @@ class BidSkipList(SkipList):
             new_node.forward[lvl] = update[lvl].forward[lvl]
             update[lvl].forward[lvl] = new_node
         
-        self.order_info[order.order_id] = new_node
         return True
     
     def delete(self, order: Order) -> bool:
@@ -690,12 +704,12 @@ class OrderBook:
         - 远盘O(1)
     """
     
-    def __init__(self, symbol="BTCUSDT", logger=None):
+    def __init__(self, symbol="BTCUSDT", max_nodes=100_000, logger=None):
         self.symbol = symbol
         self.near_bids = SortedBidArray(MAX_NEAR_SIZE, logger)
-        self.far_bids = BidSkipList(max_level=16, pN=4)
+        self.far_bids = BidSkipList(max_level=16, pN=4, max_nodes=max_nodes)
         self.near_asks = SortedAskArray(MAX_NEAR_SIZE, logger)
-        self.far_asks = AskSkipList(max_level=16, pN=4)
+        self.far_asks = AskSkipList(max_level=16, pN=4, max_nodes=max_nodes)
         self.orders = {}
         self.ask_lock = threading.RLock()
         self.bid_lock = threading.RLock()
@@ -772,7 +786,7 @@ class OrderBook:
                 if result:
                     # batch insert success
                     if move_out_ids:
-                        remain_orders.append(self.orders[move_out_ids[0]])
+                        remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
                         self.far_bids.batch_insert(remain_orders)
         else:
@@ -781,7 +795,7 @@ class OrderBook:
                 if result:
                     # batch insert success
                     if move_out_ids:
-                        remain_orders.append(self.orders[move_out_ids[0]])
+                        remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
                         self.far_asks.batch_insert(remain_orders)
 
@@ -816,7 +830,7 @@ class OrderBook:
 
     def get_order_book(self, depth=30) -> OrderBookModel:
         """获取订单簿数据"""
-        with self.lock:
+        with self.ask_lock, self.bid_lock:
             order_book = OrderBookModel(self.symbol)
             order_book.bids = self.peek_depth(depth)
             order_book.asks = self.peek_depth(depth)
@@ -846,8 +860,8 @@ class OrderBook:
         order = self.orders.get(order_id)
         if not order:
             return None
-        with self.lock:
-            order.filled_quantity = filled_quantity
-            if order.filled_quantity >= order.quantity:
-                self.remove_order(order_id)
-            return order
+
+        order.filled_quantity = filled_quantity
+        if order.filled_quantity >= order.quantity:
+            self.remove_order(order_id)
+        return order
