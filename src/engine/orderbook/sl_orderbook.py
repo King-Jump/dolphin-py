@@ -80,30 +80,6 @@ class SortedBaseArray:
     def is_empty(self) -> bool:
         return self._capacity == 0
 
-    def delete(self, order: Order) -> bool:
-        """ delete order from the array
-        """
-        if self._capacity == 0: # empty array
-            return False
-
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
-            if condition < 0:
-                # mid < order
-                start = mid + 1
-            elif condition > 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                # found and delte
-                for idx in range(mid, self._capacity - 1):
-                    self._values[idx] = self._values[idx+1]
-                self._capacity -= 1
-                return True
-        return False
-
     def peek(self) -> Optional[float]:
         """ peek the first order in the array
         """
@@ -148,6 +124,12 @@ class SortedAskArray(SortedBaseArray):
             self._capacity += 1
             return True
 
+        if compare(self._values[self._capacity-1], order) < 0:
+            # append new order
+            self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
+            self._capacity += 1
+            return True
+        
         offset = self._bisearch(order)
         if offset == -1:
             return False
@@ -167,6 +149,31 @@ class SortedAskArray(SortedBaseArray):
 
         self._capacity += 1
         return True
+
+    def delete(self, order: Order) -> bool:
+        """ delete order from the array
+        """
+        if self._capacity == 0: # empty array
+            return False
+
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = compare(self._values[mid], order)
+            if condition < 0:
+                # mid < order
+                start = mid + 1
+            elif condition > 0:
+                # mid > order
+                end = mid - 1
+            else: # condition == 0
+                # found and delte
+                for idx in range(mid, self._capacity - 1):
+                    self._values[idx] = self._values[idx+1]
+                self._capacity -= 1
+                return True
+        return False
+
 
     def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
         """ batch insert orders by merge sort
@@ -274,12 +281,12 @@ class SortedAskArray(SortedBaseArray):
                     break
             if read_idx >= self._capacity:
                 break
-        self._capacity -= len(deleted_orders)
 
         for i in range(read_idx, self._capacity):
             self._values[write_idx] = self._values[i]
             write_idx += 1
 
+        self._capacity -= len(deleted_orders)
         return deleted_orders
 
 
@@ -321,12 +328,16 @@ class SortedBidArray(SortedBaseArray):
             self._values[0] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
             return True
-
+        
+        if compare(self._values[self._capacity-1], order) > 0:
+            # append new order
+            self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
+            self._capacity += 1
+            return True
+        
         start = self._bisearch(order)
         if start == -1:
             return False
-
-
 
         # stop when start == end
         condition = compare(self._values[start], order)
@@ -343,6 +354,30 @@ class SortedBidArray(SortedBaseArray):
 
         self._capacity += 1
         return True
+
+    def delete(self, order: Order) -> bool:
+        """ delete order from the array
+        """
+        if self._capacity == 0: # empty array
+            return False
+
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = compare(self._values[mid], order)
+            if condition > 0:
+                # mid < order
+                start = mid + 1
+            elif condition < 0:
+                # mid > order
+                end = mid - 1
+            else: # condition == 0
+                # found and delte
+                for idx in range(mid, self._capacity - 1):
+                    self._values[idx] = self._values[idx+1]
+                self._capacity -= 1
+                return True
+        return False
 
     def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
         """ batch insert orders by merge sort
@@ -427,7 +462,7 @@ class SortedBidArray(SortedBaseArray):
         if self._capacity == 0:
             return deleted_orders
 
-        sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+        sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
         read_idx = 0
         write_idx = 0
         for order in sorted_orders:
@@ -450,12 +485,12 @@ class SortedBidArray(SortedBaseArray):
                     break
             if read_idx >= self._capacity:
                 break
-        self._capacity -= len(deleted_orders)
 
         for i in range(read_idx, self._capacity):
             self._values[write_idx] = self._values[i]
             write_idx += 1
 
+        self._capacity -= len(deleted_orders)
         return deleted_orders
 
 
@@ -802,6 +837,10 @@ class OrderBook:
                 result, move_out_ids, remain_orders = self.near_bids.batch_insert(orders)
                 if result:
                     # batch insert success
+                    for order in orders:
+                        if order.order_id in remain_orders:
+                            continue
+                        self.orders[order.order_id] = order
                     if move_out_ids:
                         remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
@@ -811,6 +850,10 @@ class OrderBook:
                 result, move_out_ids, remain_orders = self.near_asks.batch_insert(orders)
                 if result:
                     # batch insert success
+                    for order in orders:
+                        if order.order_id in remain_orders:
+                            continue
+                        self.orders[order.order_id] = order
                     if move_out_ids:
                         remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
