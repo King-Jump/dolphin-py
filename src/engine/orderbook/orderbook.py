@@ -9,7 +9,7 @@ class BaseSortedCircularArray:
         self.max_size = max_size
         self.head = 0
         self.tail = 0
-    
+
     def pop(self):
         # Get the best order (head of queue)
         if self.head == self.tail:
@@ -19,13 +19,13 @@ class BaseSortedCircularArray:
         self.orders[self.head] = None
         self.head = (self.head + 1) % self.max_size
         return order
-    
+
     def peek(self):
         if self.head == self.tail:
             # Queue is empty
             return None
         return self.orders[self.head]
-    
+
     def peek_order(self, size) -> list[Order]:
         orders = []
         head, tail = self.head, self.tail
@@ -35,7 +35,7 @@ class BaseSortedCircularArray:
             if len(orders) >= size:
                 break
         return orders[:size]
-    
+
     def peek_depth(self, size) -> list[tuple[float, float]]:
         orders = []
         head, tail = self.head, self.tail
@@ -58,7 +58,7 @@ class BaseSortedCircularArray:
         if head == tail:
             # Queue is empty
             return False
-        
+
         if head < tail:
             for i in range(head, tail):
                 if self.orders[i].order_id == order_id:
@@ -94,7 +94,7 @@ class BaseSortedCircularArray:
                     self.tail -= 1
                     return True
         return False
-    
+
     def __len__(self):
         return (self.tail - self.head + self.max_size) % self.max_size
 
@@ -107,7 +107,7 @@ class BidSortedCircularArray(BaseSortedCircularArray):
             self.orders[self.tail] = order
             self.tail = (self.tail + 1) % self.max_size
             return
-        
+
         order_price = order.price
         if (tail + 1) % self.max_size == head:
             # Queue is full, remove lowest price order
@@ -148,7 +148,7 @@ class BidSortedCircularArray(BaseSortedCircularArray):
                         break
                     self.orders[insert_idx + 1] = self.orders[insert_idx]
                     insert_idx -= 1
-                
+
                 # Insert order
                 if insert_idx >= 0:
                     self.orders[insert_idx] = order
@@ -159,7 +159,7 @@ class BidSortedCircularArray(BaseSortedCircularArray):
                     self.orders[0] = order
                     self.tail += 1
                     return
-                
+
                 self.orders[0] = self.orders[self.max_size - 1]
                 # Find insertion position in the second segment
                 insert_idx = self.max_size - 2
@@ -169,13 +169,13 @@ class BidSortedCircularArray(BaseSortedCircularArray):
                         break
                     self.orders[insert_idx + 1] = self.orders[insert_idx]
                     insert_idx -= 1
-                
+
                 # Insert order
                 self.orders[insert_idx + 1] = order
                 self.tail += 1
                 return
 
-        
+
 class AskSortedCircularArray(BaseSortedCircularArray):
     def push(self, order):
         # Sell orders sorted by price ascending, same price by time ascending
@@ -226,18 +226,18 @@ class AskSortedCircularArray(BaseSortedCircularArray):
                         break
                     self.orders[insert_idx + 1] = self.orders[insert_idx]
                     insert_idx -= 1
-                
+
                 # Insert order
                 if insert_idx >= 0:
                     self.orders[insert_idx] = order
                     self.tail += 1
                     return
-                
+
                 if self.orders[self.max_size - 1].price <= order_price:
                     self.orders[0] = order
                     self.tail += 1
                     return
-                
+
                 self.orders[0] = self.orders[self.max_size - 1]
                 # Find insertion position in the second segment
                 insert_idx = self.max_size - 2
@@ -262,7 +262,7 @@ class OrderBook:
         self.asks = AskSortedCircularArray()
         self.orders = {}
         self.lock = threading.RLock()
-    
+
     def add_order(self, order):
         with self.lock:
             self.orders[order.order_id] = order
@@ -270,13 +270,13 @@ class OrderBook:
                 self.bids.push(order)
             else:
                 self.asks.push(order)
-    
+
     def remove_order(self, order_id):
         with self.lock:
             order = self.orders.get(order_id)
             if not order:
                 return None
-            
+
             # Remove from order book
             if order.side == OrderSide.BUY:
                 self.bids.remove(order_id)
@@ -285,7 +285,7 @@ class OrderBook:
             
             del self.orders[order_id]
             return order
-    
+
     def get_order(self, order_id):
         with self.lock:
             return self.orders.get(order_id)
@@ -293,21 +293,21 @@ class OrderBook:
     def get_order_book(self, depth=30) -> OrderBookModel:
         with self.lock:
             order_book = OrderBookModel(self.symbol)
-            
+
             # Build buy price levels
             order_book.bids = self.bids.peek_depth(depth)
-            
+
             # Build sell price levels
             order_book.asks = self.asks.peek_depth(depth)
-            
+
             order_book.timestamp = int(time.time() * 1000)
             return order_book
-    
+
     def get_best_bid(self):
         with self.lock:
             best_bid = self.bids.peek()
             return best_bid.price if best_bid else 0
-    
+
     def get_best_ask(self):
         with self.lock:
             best_ask = self.asks.peek()

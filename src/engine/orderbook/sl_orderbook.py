@@ -6,9 +6,9 @@
 import time
 import random
 import threading
-from typing import Any, Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict
 
-from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
+from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
 
 MAX_NEAR_SIZE = 1_000
 
@@ -87,6 +87,31 @@ class SortedBaseArray:
             return None
         return self._values[0][1] # order id, price, timestamp
 
+    def peek_depth(self, depth: int, order_info: Dict[str, Order]) -> List[Tuple[float, float]]:
+        """ peek the first depth orders in the array
+        """
+        if self._capacity == 0:
+            return []
+
+        level = 0
+        depth = []
+        oid, price, _ = self._values[0]
+        curr_price, curr_qty = price, order_info[oid].quantity - order_info[oid].filled_quantity
+        for i in range(1, self._capacity):
+            oid, price, _ = self._values[i]
+            if price != curr_price:
+                depth.append((curr_price, curr_qty))
+                level += 1
+                if level > depth:
+                    break
+                curr_price, curr_qty = price, order_info[oid].quantity - order_info[oid].filled_quantity
+            curr_qty += order_info[oid].quantity - order_info[oid].filled_quantity
+
+        if level <= depth:
+            depth.append((curr_price, curr_qty))
+        return depth
+
+
 class SortedAskArray(SortedBaseArray):
     """ Sorted array for ask orders, in ascending order
     """
@@ -129,11 +154,11 @@ class SortedAskArray(SortedBaseArray):
             self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
             return True
-        
+
         offset, condition = self._bisearch(order)
         if offset == -1:
             return False
-        
+
         if condition < 0:
             # insert after offset, move array
             for i in range(self._capacity, offset+1, -1):
@@ -236,11 +261,11 @@ class SortedAskArray(SortedBaseArray):
                         self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx -= 1
                         break
-                    else: # condition > 0
-                        # append read idx
-                        self._values[write_idx] = self._values[read_idx]
-                        write_idx -= 1
-                        read_idx -= 1
+                    # else: condition > 0
+                    # append read idx
+                    self._values[write_idx] = self._values[read_idx]
+                    write_idx -= 1
+                    read_idx -= 1
 
                 if read_idx < 0:
                     self._values[write_idx] = (order.order_id, order.price, order.timestamp)
@@ -324,13 +349,13 @@ class SortedBidArray(SortedBaseArray):
             self._values[0] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
             return True
-        
+
         if compare(self._values[self._capacity-1], order) > 0:
             # append new order
             self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
             return True
-        
+
         offset, condition = self._bisearch(order)
         if offset == -1:
             return False
@@ -383,11 +408,11 @@ class SortedBidArray(SortedBaseArray):
                 self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
                 self._capacity = self.max_size
                 return True, [], sorted_orders[self.max_size:]
-            else:
-                for idx, order in enumerate(sorted_orders):
-                    self._values[idx] = (order.order_id, order.price, order.timestamp)
-                self._capacity = len(sorted_orders)
-                return True, [], []
+            # else
+            for idx, order in enumerate(sorted_orders):
+                self._values[idx] = (order.order_id, order.price, order.timestamp)
+            self._capacity = len(sorted_orders)
+            return True, [], []
 
         if len(orders) + self._capacity > self.max_size:
             # create a new near-end array, since near-end array is not enough
@@ -506,7 +531,7 @@ class SkipList:
         self.capacity = 0   # number of nodes
         self.max_node_size = max_nodes  # max number of nodes
         self.free_nodes = [SkipNode(None, max_level, i) for i in range(self.max_node_size)]  # list of free nodes
-        self.free_nodes_ptr = list(range(1, self.max_node_size))
+        self.free_nodes_ptr = list(range(1, self.max_node_size+1))
         self.free_ptr_head = 0
 
     def size(self) -> int:
@@ -515,7 +540,7 @@ class SkipList:
     def _new_node(self, order: Order, level: int):
         if self.capacity >= self.max_node_size:
             self.free_nodes.extend([SkipNode(None, self.max_level, i+self.capacity) for i in range(self.max_node_size)])
-            self.free_nodes_ptr.extend(range(self.max_node_size, self.max_node_size*2))
+            self.free_nodes_ptr.extend(range(self.max_node_size+1, self.max_node_size*2+1))
             self.max_node_size *= 2
 
         # allocate a new node from free node list
@@ -527,11 +552,11 @@ class SkipList:
         self.free_ptr_head = self.free_nodes_ptr[self.free_ptr_head]
         self.capacity += 1
         return node
-        
+
     def _free_node(self, node: SkipNode):
         # add the node to free node list
         node.order = None
-        self.free_nodes_ptr[node.index] = self.free_nodes_ptr_head
+        self.free_nodes_ptr[node.index] = self.free_ptr_head
         self.free_ptr_head = node.index
         self.capacity -= 1
 
@@ -556,13 +581,26 @@ class SkipList:
 
         self._free_node(target)
 
+    def insert(self, order: Order) -> bool:
+        """ insert the order into skip list
+        """
+        return False
+
+    def delete(self, order: Order) -> bool:
+        """ delete the order from skip list
+        """
+        return False
+
     def batch_insert(self, orders):
         for order in orders:
             self.insert(order)
 
     def batch_delete(self, orders):
+        ids = []
         for order in orders:
-            self.delete(order)
+            if self.delete(order):
+                ids.append(order.order_id)
+        return ids
 
     def peek(self) -> Optional[Order]:
         """ peek the first order in the array
@@ -589,10 +627,36 @@ class SkipList:
         self._free_node(node)
         return order
 
+    def peek_depth(self, depth: int) -> List[Tuple[float, float]]:
+        """ peek the first depth orders in the array
+        """
+        if self.capacity == 0:
+            return []
+
+        level = 0
+        depth = []
+        current = self.head.forward[0]
+        curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
+        while current.forward[0]:
+            current = current.forward[0]
+            price, qty = current.order.price, current.order.quantity - current.order.filled_quantity
+            if price != curr_price:
+                depth.append((curr_price, curr_qty))
+                level += 1
+                if level > depth:
+                    break
+
+                curr_price = price
+                curr_qty = qty
+            else:
+                curr_qty += qty
+        if level <= depth:
+            depth.append((curr_price, curr_qty))
+        return depth
 
 class AskSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
-        super().__init__(max_level, pN, max_nodes) 
+        super().__init__(max_level, pN, max_nodes)
 
     def search(self, order: Order) -> Optional[Order]:
         """查找指定键，返回值，不存在则返回 None"""
@@ -605,7 +669,7 @@ class AskSkipList(SkipList):
         if candidate and candidate.order.order_id == order.order_id:
             return candidate.order
         return None
-    
+
     def insert(self, order: Order) -> bool:
         """插入键值对，若键已存在则更新值"""
         # update 数组用于记录每一层插入位置的前驱节点
@@ -640,7 +704,7 @@ class AskSkipList(SkipList):
             update[lvl].forward[lvl] = new_node
 
         return True
-    
+
     def delete(self, order: Order) -> bool:
         """删除指定键, 返回 True 表示成功, False 表示键不存在"""
         update = [None] * self.max_level
@@ -663,7 +727,7 @@ class AskSkipList(SkipList):
 
 class BidSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
-        super().__init__(max_level, pN, max_nodes) 
+        super().__init__(max_level, pN, max_nodes)
 
     def search(self, order: Order) -> Optional[Order]:
         """查找指定键，返回值，不存在则返回 None"""
@@ -676,7 +740,7 @@ class BidSkipList(SkipList):
         if candidate and candidate.order.order_id == order.order_id:
             return candidate.order
         return None
-    
+
     def insert(self, order: Order) -> bool:
         """插入键值对，若键已存在则更新值"""
         # update 数组用于记录每一层插入位置的前驱节点
@@ -709,9 +773,9 @@ class BidSkipList(SkipList):
         for lvl in range(new_level):
             new_node.forward[lvl] = update[lvl].forward[lvl]
             update[lvl].forward[lvl] = new_node
-        
+
         return True
-    
+
     def delete(self, order: Order) -> bool:
         """删除指定键，返回 True 表示成功，False 表示键不存在"""
         update = [None] * self.max_level
@@ -751,7 +815,7 @@ class OrderBook:
         - 近盘O(N)
         - 远盘O(1)
     """
-    
+
     def __init__(self, symbol="BTCUSDT", max_nodes=100_000, logger=None):
         self.symbol = symbol
         self.near_bids = SortedBidArray(MAX_NEAR_SIZE, logger)
@@ -786,7 +850,7 @@ class OrderBook:
         if not order:
             self.logger.error(f"[remove order] cannot find order {order_id}")
             return None
-            
+
         result = False
         if order.side == OrderSide.BUY:
             with self.bid_lock:
@@ -888,12 +952,29 @@ class OrderBook:
         """获取订单簿数据"""
         order_book = OrderBookModel(self.symbol)
         with self.ask_lock:
-            # TODO
-            order_book.asks = [self.orders[oid] for oid in self.near_asks.peek_depth(depth)]
-
+            asks = self.near_asks.peek_depth(depth, self.orders)
+            if len(asks) >= depth:
+                if self.far_asks.peek() == asks[-1][0]:
+                    far_asks = self.far_asks.peek_depth(1)
+                    asks[-1][1] += far_asks[0][1]
+            else:
+                far_asks = self.far_asks.peek_depth(depth - len(asks) + 1)
+                if far_asks and far_asks[0][0] == asks[-1][0]:
+                    asks[-1][1] += far_asks[0][1]
+                    asks.extend(far_asks[1:])
+            order_book.asks = asks
         with self.bid_lock:
-            # TODO
-            order_book.bids = [self.orders[oid] for oid in self.near_bids.peek_depth(depth)]
+            bids = self.near_bids.peek_depth(depth, self.orders)
+            if len(bids) >= depth:
+                if self.far_bids.peek() == bids[-1][0]:
+                    far_bids = self.far_bids.peek_depth(1)
+                    bids[-1][1] += far_bids[0][1]
+            else:
+                far_bids = self.far_bids.peek_depth(depth - len(bids) + 1)
+                if far_bids and far_bids[0][0] == bids[-1][0]:
+                    bids[-1][1] += far_bids[0][1]
+                    bids.extend(far_bids[1:])
+            order_book.bids = bids
 
         order_book.timestamp = int(time.time() * 1000)
         return order_book
@@ -902,8 +983,8 @@ class OrderBook:
         """获取最佳买价"""
         with self.bid_lock:
             if not self.near_bids.is_empty():
-                return self.near_bids.peek()
-            
+                return self.near_bids.peek().price
+
             order = self.far_bids.peek()
             return order.price if order else 0
 
@@ -911,8 +992,8 @@ class OrderBook:
         """获取最佳卖价"""
         with self.ask_lock:
             if not self.near_asks.is_empty():
-                return self.near_asks.peek()
-            
+                return self.near_asks.peek().price
+
             order = self.far_asks.peek()
             return order.price if order else 0
 

@@ -10,12 +10,12 @@ interval_map = {
 }
 
 class FuturesHandler:
-    
+
     def _validate_symbol(self, symbol):
         """Validate if symbol is allowed"""
         allowed_symbols = current_app.config.get('ALLOWED_SYMBOLS', ['BTCUSDT'])
         return symbol in allowed_symbols
-    
+
     def new_order(self, data):
         try:
             symbol = data.get('symbol')
@@ -49,7 +49,7 @@ class FuturesHandler:
             return jsonify({"code": 400, "msg": "Failed to create order"}), 400
         except Exception as e:
             return jsonify({"code": 500, "msg": str(e)}), 500
-    
+
     def new_batch_order(self, data):
         try:
             params = data.get('batchOrders', [])
@@ -66,19 +66,19 @@ class FuturesHandler:
                 "type": order.type,
                 "side": order.side
             } for order in orders]
-            
+
             return jsonify({
                 "code": 200,
                 "data": results
             })
         except Exception as e:
             return jsonify({"code": 500, "msg": str(e)}), 500
-    
+
     def cancel_orders(self, symbol, order_ids):
         try:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-            
+
             results = []
             for order_id in order_ids:
                 cancelled = global_futures_engine.cancel_order(symbol, order_id)
@@ -101,12 +101,12 @@ class FuturesHandler:
             })
         except Exception as e:
             return jsonify({"code": 500, "msg": str(e)}), 500
-    
+
     def open_orders(self, args):
         symbol = args.get('symbol')
         if symbol and not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         orders = global_futures_engine.get_open_orders(symbol)
         return jsonify({
             "code": 200,
@@ -125,12 +125,12 @@ class FuturesHandler:
                 for order in orders
             ]
         })
-    
+
     def mock_trade(self, args):
         symbol = args.get('symbol')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         side = args.get('side')
         price = args.get('price')
         quantity = args.get('quantity')
@@ -149,12 +149,12 @@ class FuturesHandler:
                 "status": "FILLED"
             }
         })
-    
+
     def get_depth(self, args):
         symbol = args.get('symbol', 'BTCUSDT')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         limit = int(args.get('limit', 30))
         depth = global_futures_engine.get_order_book(symbol).get_order_book(limit)
         return jsonify({
@@ -165,12 +165,12 @@ class FuturesHandler:
                 "asks": depth.asks
             }
         })
-    
+
     def get_ticker_price(self, args):
         symbol = args.get('symbol', 'BTCUSDT')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         ticker = global_futures_engine.get_trades(symbol, 1)
         if ticker:
             ticker = ticker[0]
@@ -184,19 +184,19 @@ class FuturesHandler:
                 "quantity": str(ticker.quantity)
             }
         })
-    
+
     def get_klines(self, args):
         symbol = args.get('symbol', 'BTCUSDT')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         interval = args.get('interval', '1m')
         if interval not in interval_map:
             return jsonify({"code": 400, "msg": f"Interval {interval} is not traded"}), 400
-        
+
         limit = int(args.get('limit', 50))
         kline_data = global_futures_engine.get_klines(symbol, interval, limit)
-                
+
         klines = [{
                 "ot": bar[0],                  # Open time
                 "o": str(bar[1]),     # Open price
@@ -207,17 +207,17 @@ class FuturesHandler:
                 "ct": bar[6],  # Close time
                 "a": str(bar[7])  # Quote asset volume 
             } for bar in kline_data]
-        
+
         return jsonify({
             "code": 200,
             "data": klines
         })
-    
+
     def get_trades(self, args):
         symbol = args.get('symbol', 'BTCUSDT')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         limit = int(args.get('limit', 50))
         trades = global_futures_engine.get_trades(symbol, limit)
         return jsonify({
@@ -233,23 +233,23 @@ class FuturesHandler:
                 for trade in trades
             ]
         })
-    
+
     def order_status(self, args):
         symbol = args.get('symbol')
         order_id = args.get('orderId')
-        
+
         if not symbol:
             return jsonify({"code": 400, "msg": "Symbol is required"}), 400
         if not order_id:
             return jsonify({"code": 400, "msg": "orderId is required"}), 400
-        
+
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-        
+
         order = global_futures_engine.get_order(symbol, order_id)
         if not order:
             return jsonify({"code": 404, "msg": "Order not found"}), 404
-        
+
         return jsonify({
             "code": 200,
             "data": {

@@ -58,6 +58,6 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=start_flask)
     flask_thread.daemon = True
     flask_thread.start()
-    
+
     # Start WebSocket server
     asyncio.run(start_websocket_server())

@@ -1,6 +1,6 @@
 import logging
-from src.engine.orderbook.orderbook import OrderBook
-#from src.engine.orderbook.rb_orderbook import OrderBook
+#from src.engine.orderbook.orderbook import OrderBook
+from src.engine.orderbook.sl_orderbook import OrderBook
 from src.engine.types.types import (
     Order,
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
@@ -21,13 +21,13 @@ class MatchingEngine:
 
         self.max_kline_size = 200
         self.klines = {}
-    
+
     def get_order_book(self, symbol) -> OrderBook:
         with self.lock:
             if symbol not in self.order_books:
                 self.order_books[symbol] = OrderBook(symbol)
             return self.order_books[symbol]
-    
+
     def process_order(self, order):
         trades = []
         order_book = self.get_order_book(order.symbol)
@@ -38,28 +38,28 @@ class MatchingEngine:
         # Process limit order
         else:
             trades = self._process_limit_order(order_book, order)
-        
+
         # Store trades and notify WebSocket clients
         if trades:
             self._store_trades(order.symbol, trades)
         
         return trades
-    
+
     def _process_limit_order(self, order_book, order):
         trades = []
-        
+
         if order.side == OrderSide.BUY:
             # Buy order matches sell orders
             while True:
                 best_ask = order_book.asks.peek()
                 if not best_ask or best_ask.price > order.price:
                     break
-                
+
                 # Calculate match quantity
                 match_quantity = order.quantity - order.filled_quantity
                 if match_quantity > best_ask.quantity - best_ask.filled_quantity:
                     match_quantity = best_ask.quantity - best_ask.filled_quantity
-                
+
                 # Generate trade
                 trade = new_trade(
                     order.symbol,
@@ -74,19 +74,19 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_ask.filled_quantity += match_quantity
-                
+
                 # Check if sell order is fully filled
                 if best_ask.filled_quantity >= best_ask.quantity:
                     best_ask.status = OrderStatus.FILLED
                     order_book.remove_order(best_ask.order_id)
                 else:
                     best_ask.status = OrderStatus.PARTIALLY_FILLED
-                
+
                 # Check if buy order is fully filled
                 if order.filled_quantity >= order.quantity:
                     order.status = OrderStatus.FILLED
                     break
-            
+
             # If order is not fully filled, add to order book
             if order.status != OrderStatus.FILLED:
                 if order.filled_quantity > 0:
@@ -94,19 +94,19 @@ class MatchingEngine:
                 else:
                     order.status = OrderStatus.NEW
                 order_book.add_order(order)
-        
+
         else:  # OrderSide.SELL
             # Sell order matches buy orders
             while True:
                 best_bid = order_book.bids.peek()
                 if not best_bid or best_bid.price < order.price:
                     break
-                
+
                 # Calculate match quantity
                 match_quantity = order.quantity - order.filled_quantity
                 if match_quantity > best_bid.quantity - best_bid.filled_quantity:
                     match_quantity = best_bid.quantity - best_bid.filled_quantity
-                
+
                 # Generate trade
                 trade = new_trade(
                     order.symbol,
@@ -121,19 +121,19 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_bid.filled_quantity += match_quantity
-                
+
                 # Check if buy order is fully filled
                 if best_bid.filled_quantity >= best_bid.quantity:
                     best_bid.status = OrderStatus.FILLED
                     order_book.remove_order(best_bid.order_id)
                 else:
                     best_bid.status = OrderStatus.PARTIALLY_FILLED
-                
+
                 # Check if sell order is fully filled
                 if order.filled_quantity >= order.quantity:
                     order.status = OrderStatus.FILLED
                     break
-            
+
             # If order is not fully filled, add to order book
             if order.status != OrderStatus.FILLED:
                 if order.filled_quantity > 0:
@@ -141,24 +141,24 @@ class MatchingEngine:
                 else:
                     order.status = OrderStatus.NEW
                 order_book.add_order(order)
-        
+
         return trades
-    
+
     def _process_market_order(self, order_book, order):
         trades = []
-        
+
         if order.side == OrderSide.BUY:
             # Market buy order matches all sell orders
             while order.filled_quantity < order.quantity:
                 best_ask = order_book.asks.peek()
                 if not best_ask:
                     break
-                
+
                 # Calculate match quantity
                 match_quantity = order.quantity - order.filled_quantity
                 if match_quantity > best_ask.quantity - best_ask.filled_quantity:
                     match_quantity = best_ask.quantity - best_ask.filled_quantity
-                
+
                 # Generate trade
                 trade = new_trade(
                     order.symbol,
@@ -169,30 +169,30 @@ class MatchingEngine:
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
-                
+
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_ask.filled_quantity += match_quantity
-                
+
                 # Check if sell order is fully filled
                 if best_ask.filled_quantity >= best_ask.quantity:
                     best_ask.status = OrderStatus.FILLED
                     order_book.remove_order(best_ask.order_id)
                 else:
                     best_ask.status = OrderStatus.PARTIALLY_FILLED
-        
+
         else:  # OrderSide.SELL
             # Market sell order matches all buy orders
             while order.filled_quantity < order.quantity:
                 best_bid = order_book.bids.peek()
                 if not best_bid:
                     break
-                
+
                 # Calculate match quantity
                 match_quantity = order.quantity - order.filled_quantity
                 if match_quantity > best_bid.quantity - best_bid.filled_quantity:
                     match_quantity = best_bid.quantity - best_bid.filled_quantity
-                
+
                 # Generate trade
                 trade = new_trade(
                     order.symbol,
@@ -207,23 +207,23 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_bid.filled_quantity += match_quantity
-                
+
                 # Check if buy order is fully filled
                 if best_bid.filled_quantity >= best_bid.quantity:
                     best_bid.status = OrderStatus.FILLED
                     order_book.remove_order(best_bid.order_id)
                 else:
                     best_bid.status = OrderStatus.PARTIALLY_FILLED
-        
+
         # Market orders are marked as filled regardless of whether they are fully executed
         if order.filled_quantity > 0:
             if order.filled_quantity >= order.quantity:
                 order.status = OrderStatus.FILLED
             else:
                 order.status = OrderStatus.PARTIALLY_FILLED
-        
+
         return trades
-    
+
     def cancel_order(self, symbol, order_id):
         order_book = self.get_order_book(symbol)
         order = order_book.remove_order(order_id)
@@ -233,15 +233,15 @@ class MatchingEngine:
             # If the order doesn't exist, return an empty order with canceled status
             order = empty_order(order_id, symbol)
         return order
-    
+
     def get_order(self, symbol, order_id):
         order_book = self.get_order_book(symbol)
         return order_book.get_order(order_id)
-    
+
     def get_order_book_data(self, symbol, depth=30):
         order_book = self.get_order_book(symbol)
         return order_book.get_order_book(depth)
-    
+
     def create_order(self, symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):        
         logger.debug(f"create_order called with: symbol={symbol}, side={side}, order_type={order_type}, quantity={quantity}, price={price}, client_order_id={client_order_id}, is_futures={is_futures}")
         try:
@@ -254,10 +254,10 @@ class MatchingEngine:
             logger.debug(f"Error creating order: {e}")
             traceback.print_exc()
             raise
-        
+
         trades = self.process_order(order)
         return trades, order
-        
+
     def create_orders(self, params, is_futures=False):
         # batch create orders
         logger.debug(f"Creating orders with params: {params}")
@@ -282,9 +282,9 @@ class MatchingEngine:
                 is_futures=is_futures
             ) for param in params if param.get('side') == OrderSide.SELL]
         sell_orders.sort(key=lambda x: x.price)
-        
+
         order_book = self.get_order_book(buy_orders[0].symbol if buy_orders else sell_orders[0].symbol)
-        
+
         total_trades = []
         skip_match = False 
         for order in buy_orders:
@@ -295,10 +295,10 @@ class MatchingEngine:
             else:
                 trades = self.process_order(order)
                 total_trades.extend(trades)
-            
+
             if order.status != OrderStatus.FILLED:
                 skip_match = True
-        
+
         skip_match = False 
         for order in sell_orders:
             # Batch orders, simplified matching process
@@ -308,7 +308,7 @@ class MatchingEngine:
             else:
                 trades = self.process_order(order)
                 total_trades.extend(trades)
-            
+
             if order.status != OrderStatus.FILLED:
                 skip_match = True
 
@@ -325,13 +325,13 @@ class MatchingEngine:
                 results.append(order)
             else:
                 results.append(empty_order(order_id, symbol))
-        
+
         return results
-    
+
     def get_open_orders(self, symbol=None):
         order_book = self.get_order_book(symbol)
         return order_book.asks.peek_order(600) + order_book.bids.peek_order(600)
-    
+
     def _store_trades(self, symbol, trades):
         with self.lock:
             if symbol not in self.trades:
@@ -340,7 +340,7 @@ class MatchingEngine:
             self.trades[symbol].extend(trades)
             if len(self.trades[symbol]) > 1000:
                 self.trades[symbol] = self.trades[symbol][-1000:]
-    
+
     def get_trades(self, symbol, limit=50):
         with self.lock:
             if symbol not in self.trades:
@@ -359,7 +359,7 @@ class MatchingEngine:
         )
         with self.lock:
             self.trades[symbol].append(trade)
-        
+
     def update_klines(self, symbol, price, quantity):
         # Update klines for the given symbol with the latest trade price and quantity
         if symbol not in self.klines:
@@ -371,7 +371,7 @@ class MatchingEngine:
                 'prev_update_hour': 0,
                 'prev_update_day': 0,
             }
-        
+
         klines = self.klines[symbol]
         minute = time.time() // 60
         logger.debug(f"Updating klines for {symbol} at minute={minute}, prev_update_minute={klines['prev_update_minute']}")
