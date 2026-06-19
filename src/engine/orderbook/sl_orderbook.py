@@ -530,6 +530,7 @@ class SkipList:
         
     def _free_node(self, node: SkipNode):
         # add the node to free node list
+        node.order = None
         self.free_nodes_ptr[node.index] = self.free_nodes_ptr_head
         self.free_ptr_head = node.index
         self.capacity -= 1
