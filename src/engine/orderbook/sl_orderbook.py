@@ -88,12 +88,15 @@ class SortedBaseArray:
         return self._values[0][1] # order id, price, timestamp
 
 class SortedAskArray(SortedBaseArray):
-    """ Sorted array for ask orders, in ascending
+    """ Sorted array for ask orders, in ascending order
     """
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
 
-    def _bisearch(self, order: Order) -> int:
+    def _bisearch(self, order: Order) -> Tuple[int, int]:
+        """ binary search and return the offset and condition, in ascending order
+            Assert: _values is not empty and not full, order < _values[-1]
+        """
         start, end = 0, self._capacity - 1
         while start <= end:
             mid = int((start + end) * 0.5)
@@ -106,12 +109,9 @@ class SortedAskArray(SortedBaseArray):
                 end = mid - 1
             else: # condition == 0
                 self.logger.error("%s is already in the near-end array", order.order_id)
-                return -1
+                return -1, 0
 
-        if start >= self._capacity:
-            return -1
-
-        return start
+        return mid, condition
 
     def insert(self, order: Order) -> bool:
         """ binary search and insert order, assert the array is not full
@@ -130,19 +130,17 @@ class SortedAskArray(SortedBaseArray):
             self._capacity += 1
             return True
         
-        offset = self._bisearch(order)
+        offset, condition = self._bisearch(order)
         if offset == -1:
             return False
-
-        # stop when start == end
-        condition = compare(self._values[offset], order)
+        
         if condition < 0:
-            # insert after start, move array
+            # insert after offset, move array
             for i in range(self._capacity, offset+1, -1):
                 self._values[i] = self._values[i-1]
             self._values[offset+1] = (order.order_id, order.price, order.timestamp)
         else: # condition > 0
-            # insert before start, move array
+            # insert before offset, move array
             for i in range(self._capacity, offset, -1):
                 self._values[i] = self._values[i-1]
             self._values[offset] = (order.order_id, order.price, order.timestamp)
@@ -173,7 +171,6 @@ class SortedAskArray(SortedBaseArray):
                 self._capacity -= 1
                 return True
         return False
-
 
     def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
         """ batch insert orders by merge sort
@@ -248,6 +245,7 @@ class SortedAskArray(SortedBaseArray):
                 if read_idx < 0:
                     self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                     write_idx -= 1
+            self._capacity += len(reverse_sorted_orders)
             return True, [], []
 
     def batch_delete(self, orders: List[Order]) -> List[str]:
@@ -291,13 +289,14 @@ class SortedAskArray(SortedBaseArray):
 
 
 class SortedBidArray(SortedBaseArray):
-    """ Sorted array for bid orders, in descending
+    """ Sorted array for bid orders, in descending order
     """
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
 
-    def _bisearch(self, order: Order) -> int:
-        """ binary search the position to insert order
+    def _bisearch(self, order: Order) -> Tuple[int, int]:
+        """ binary search the position to insert order, in descending order
+            Assert _values is not full and is not empty, and _valuse[-1] < order
         """
         start, end = 0, self._capacity - 1
         while start <= end:
@@ -311,12 +310,9 @@ class SortedBidArray(SortedBaseArray):
                 end = mid - 1
             else: # condition == 0
                 self.logger.error("%s is already in the near-end array", order.order_id)
-                return -1
+                return -1, 0
 
-        if start >= self._capacity:
-            return -1
-
-        return start
+        return mid, condition
 
     def insert(self, order: Order) -> bool:
         """ binary search and insert order, assert the array is not full
@@ -335,22 +331,20 @@ class SortedBidArray(SortedBaseArray):
             self._capacity += 1
             return True
         
-        start = self._bisearch(order)
-        if start == -1:
+        offset, condition = self._bisearch(order)
+        if offset == -1:
             return False
 
-        # stop when start == end
-        condition = compare(self._values[start], order)
         if condition < 0:
-            # insert before start, move array
-            for i in range(self._capacity, start, -1):
+            # insert at offset, move array
+            for i in range(self._capacity, offset, -1):
                 self._values[i] = self._values[i-1]
-            self._values[start] = (order.order_id, order.price, order.timestamp)
+            self._values[offset] = (order.order_id, order.price, order.timestamp)
         else: # condition > 0
-            # insert after start, move array
-            for i in range(self._capacity, start+1, -1):
+            # insert after offset, move array
+            for i in range(self._capacity, offset+1, -1):
                 self._values[i] = self._values[i-1]
-            self._values[start+1] = (order.order_id, order.price, order.timestamp)
+            self._values[offset+1] = (order.order_id, order.price, order.timestamp)
 
         self._capacity += 1
         return True
@@ -452,6 +446,7 @@ class SortedBidArray(SortedBaseArray):
                 if read_idx < 0:
                     self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                     write_idx -= 1
+            self._capacity += len(reverse_sorted_orders)
             return True, [], []
 
     def batch_delete(self, orders: List[Order]) -> List[str]:
