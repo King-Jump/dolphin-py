@@ -37,6 +37,7 @@ export interface NewOrderRequest {
   quantity: string;
   price?: string;
   client_order_id?: string;
+  leverage?: number;
 }
 
 export interface NewOrderResult {

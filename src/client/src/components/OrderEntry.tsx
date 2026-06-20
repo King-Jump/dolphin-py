@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { createOrder } from '../api/client';
 import type { NewOrderResult, OrderSide, OrderType } from '../types/api';
+import { isLoggedIn } from '../utils/auth';
+import { LoginModal } from './LoginModal';
 
 const BG = '#161a1e';
 const BORDER = '#3d4552';
@@ -31,11 +33,14 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
   const [type, setType] = useState<OrderType>('LIMIT');
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [leverage, setLeverage] = useState('1');
   const [submitting, setSubmitting] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [msg, setMsg] = useState<string>('');
   const [result, setResult] = useState<NewOrderResult | null>(null);
+  const pendingSubmitRef = useRef(false);
 
-  const submit = async () => {
+  const doSubmit = async () => {
     setMsg('');
     setResult(null);
     if (!quantity.trim()) {
@@ -46,6 +51,11 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
       setMsg('限价单请输入价格');
       return;
     }
+    const leverageNum = Number(leverage.trim());
+    if (!Number.isFinite(leverageNum) || leverageNum <= 0) {
+      setMsg('请输入有效的杠杆倍数');
+      return;
+    }
     try {
       setSubmitting(true);
       const res = await createOrder({
@@ -53,6 +63,7 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
         side,
         type,
         quantity: quantity.trim(),
+        leverage: leverageNum,
         ...(type === 'LIMIT' ? { price: price.trim() } : {}),
       });
       setResult(res);
@@ -63,6 +74,22 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
       setMsg(e instanceof Error ? e.message : '下单失败');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const submit = () => {
+    if (!isLoggedIn()) {
+      pendingSubmitRef.current = true;
+      setShowLogin(true);
+      return;
+    }
+    void doSubmit();
+  };
+
+  const handleLoginSuccess = () => {
+    if (pendingSubmitRef.current) {
+      pendingSubmitRef.current = false;
+      void doSubmit();
     }
   };
 
@@ -171,6 +198,19 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
         />
       </div>
 
+      <div>
+        <div style={{ color: MUTED, fontSize: 11, marginBottom: 4 }}>杠杆倍数</div>
+        <input
+          value={leverage}
+          onChange={(e) => setLeverage(e.target.value)}
+          placeholder="1"
+          type="number"
+          min={1}
+          step={1}
+          style={INPUT_STYLE}
+        />
+      </div>
+
       <button
         type="button"
         onClick={submit}
@@ -199,6 +239,15 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
           )}
         </div>
       )}
+
+      <LoginModal
+        open={showLogin}
+        onClose={() => {
+          pendingSubmitRef.current = false;
+          setShowLogin(false);
+        }}
+        onSuccess={handleLoginSuccess}
+      />
     </div>
   );
 }
