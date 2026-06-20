@@ -21,8 +21,9 @@ class OrderStatus:
 
 # Order model
 class Order:
-    def __init__(self, symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):
+    def __init__(self, uid,symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):
         self.order_id = str(uuid.uuid4())
+        self.uid = uid
         self.client_order_id = client_order_id or str(uuid.uuid4())
         self.symbol = symbol
         self.side = side
@@ -37,6 +38,7 @@ class Order:
 
     def to_dict(self):
         return {
+            "uid": self.uid,
             "orderId": self.order_id,
             "clientOrderId": self.client_order_id,
             "symbol": self.symbol,
@@ -117,12 +119,12 @@ class Ticker:
         }
 
 # Create new order
-def new_order(symbol, side, order_type, quantity, price):
-    return Order(symbol, side, order_type, quantity, price)
+def new_order(uid, symbol, side, order_type, quantity, price):
+    return Order(uid, symbol, side, order_type, quantity, price)
 
 # Create empty order, i.e., order not in order book
-def empty_order(order_id, symbol):
-    order = Order(symbol, "BUY", "LIMIT", 0)
+def empty_order(uid, order_id, symbol):
+    order = Order(uid, symbol, "BUY", "LIMIT", 0)
     order.order_id = order_id
     order.status = OrderStatus.CANCELED
     return order

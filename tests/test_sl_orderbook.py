@@ -31,9 +31,9 @@ from src.engine.orderbook.sl_orderbook import (
 from src.engine.types.types import Order, OrderSide, OrderType, OrderStatus
 
 
-def create_order(price: float, timestamp: int, order_id: str = None, quantity: float = 1.0) -> Order:
+def create_order(uid: str, price: float, timestamp: int, order_id: str = None, quantity: float = 1.0) -> Order:
     """Helper function to create an order with specific price and timestamp."""
-    order = Order("BTCUSDT", OrderSide.BUY, OrderType.LIMIT, quantity, price)
+    order = Order(uid, "BTCUSDT", OrderSide.BUY, OrderType.LIMIT, quantity, price)
     if order_id:
         order.order_id = order_id
     order.timestamp = timestamp
@@ -46,7 +46,7 @@ class TestSortedAskArray:
     def test_insert_empty_array(self):
         """Test inserting into an empty array."""
         arr = SortedAskArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid="uid1", price=100.0, timestamp=1)
 
         result = arr.insert(order)
 
@@ -58,9 +58,9 @@ class TestSortedAskArray:
         """Test inserting multiple orders in ascending price order."""
         arr = SortedAskArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=102.0, timestamp=3),
+            create_order(uid="uid1", price=100.0, timestamp=1),
+            create_order(uid="uid2", price=101.0, timestamp=2),
+            create_order(uid="uid3", price=102.0, timestamp=3),
         ]
 
         for order in orders:
@@ -77,9 +77,9 @@ class TestSortedAskArray:
         """Test inserting orders out of order."""
         arr = SortedAskArray(max_size=10)
         orders = [
-            create_order(price=102.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
-            create_order(price=101.0, timestamp=3),
+            create_order(uid="uid1", price=102.0, timestamp=1),
+            create_order(uid="uid2", price=100.0, timestamp=2),
+            create_order(uid="uid3", price=101.0, timestamp=3),
         ]
 
         for order in orders:
@@ -95,10 +95,11 @@ class TestSortedAskArray:
     def test_insert_same_price_different_timestamp(self):
         """Test inserting orders with same price but different timestamps."""
         arr = SortedAskArray(max_size=10)
+        uid = "uid1"
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=100.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=100.0, timestamp=2),
         ]
 
         for order in orders:
@@ -115,9 +116,9 @@ class TestSortedAskArray:
         """Test inserting into a full array returns False."""
         arr = SortedAskArray(max_size=3)
         for i in range(3):
-            arr.insert(create_order(price=float(i), timestamp=i))
+            arr.insert(create_order(uid="uid1", price=float(i), timestamp=i))
 
-        result = arr.insert(create_order(price=100.0, timestamp=100))
+        result = arr.insert(create_order(uid="uid1", price=100.0, timestamp=100))
 
         assert result is False
         assert arr._capacity == 3
@@ -126,9 +127,9 @@ class TestSortedAskArray:
         """Test batch inserting into an empty array."""
         arr = SortedAskArray(max_size=10)
         orders = [
-            create_order(price=102.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
-            create_order(price=101.0, timestamp=3),
+            create_order(uid="uid1", price=102.0, timestamp=1),
+            create_order(uid="uid2", price=100.0, timestamp=2),
+            create_order(uid="uid3", price=101.0, timestamp=3),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -145,10 +146,10 @@ class TestSortedAskArray:
         """Test batch insert when orders exceed max_size."""
         arr = SortedAskArray(max_size=3)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=102.0, timestamp=3),
-            create_order(price=103.0, timestamp=4),
+            create_order(uid="uid1", price=100.0, timestamp=1),
+            create_order(uid="uid2", price=101.0, timestamp=2),
+            create_order(uid="uid3", price=102.0, timestamp=3),
+            create_order(uid="uid4", price=103.0, timestamp=4),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -162,13 +163,13 @@ class TestSortedAskArray:
     def test_batch_insert_with_existing_orders(self):
         """Test batch insert when array already has orders."""
         arr = SortedAskArray(max_size=10)
-        arr.insert(create_order(price=101.0, timestamp=1))
-        arr.insert(create_order(price=103.0, timestamp=2))
+        arr.insert(create_order(uid="uid1", price=101.0, timestamp=1))
+        arr.insert(create_order(uid="uid1", price=103.0, timestamp=2))
 
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=102.0, timestamp=4),
-            create_order(price=104.0, timestamp=5),
+            create_order(uid="uid1", price=100.0, timestamp=3),
+            create_order(uid="uid1", price=102.0, timestamp=4),
+            create_order(uid="uid1", price=104.0, timestamp=5),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -181,11 +182,12 @@ class TestSortedAskArray:
 
     def test_batch_delete_existing_orders(self):
         """Test batch deleting existing orders."""
+        uid = "uid1"
         arr = SortedAskArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=102.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=101.0, timestamp=2),
+            create_order(uid=uid, price=102.0, timestamp=3),    
         ]
         for order in orders:
             arr.insert(order)
@@ -199,11 +201,12 @@ class TestSortedAskArray:
 
     def test_batch_delete_non_existing_orders(self):
         """Test batch deleting non-existing orders."""
+        uid = "uid1"
         arr = SortedAskArray(max_size=10)
-        arr.insert(create_order(price=100.0, timestamp=1))
+        arr.insert(create_order(uid=uid, price=100.0, timestamp=1))
 
         deleted = arr.batch_delete([
-            create_order(price=999.0, timestamp=999),
+            create_order(uid=uid, price=999.0, timestamp=999),
         ])
 
         assert len(deleted) == 0
@@ -216,7 +219,7 @@ class TestSortedBidArray:
     def test_insert_empty_array(self):
         """Test inserting into an empty array."""
         arr = SortedBidArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid="uid1", price=100.0, timestamp=1)
 
         result = arr.insert(order)
 
@@ -227,10 +230,11 @@ class TestSortedBidArray:
     def test_insert_multiple_orders_descending(self):
         """Test inserting multiple orders in descending price order."""
         arr = SortedBidArray(max_size=10)
+        uid = "uid1"
         orders = [
-            create_order(price=102.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=100.0, timestamp=3),
+            create_order(uid=uid, price=102.0, timestamp=1),
+            create_order(uid=uid, price=101.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
         ]
 
         for order in orders:
@@ -246,10 +250,11 @@ class TestSortedBidArray:
     def test_insert_orders_out_of_order(self):
         """Test inserting orders out of order."""
         arr = SortedBidArray(max_size=10)
+        uid = "uid1"
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=102.0, timestamp=2),
-            create_order(price=101.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=102.0, timestamp=2),
+            create_order(uid=uid, price=101.0, timestamp=3),
         ]
 
         for order in orders:
@@ -265,10 +270,11 @@ class TestSortedBidArray:
     def test_insert_same_price_different_timestamp(self):
         """Test inserting orders with same price but different timestamps."""
         arr = SortedBidArray(max_size=10)
+        uid = "uid1"
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=100.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=100.0, timestamp=2),
         ]
 
         for order in orders:
@@ -283,22 +289,24 @@ class TestSortedBidArray:
 
     def test_insert_full_array(self):
         """Test inserting into a full array returns False."""
+        uid = "uid1"
         arr = SortedBidArray(max_size=3)
         for i in range(3):
-            arr.insert(create_order(price=float(i), timestamp=i))
+            arr.insert(create_order(uid=uid, price=float(i), timestamp=i))
 
-        result = arr.insert(create_order(price=100.0, timestamp=100))
+        result = arr.insert(create_order(uid=uid, price=100.0, timestamp=100))
 
         assert result is False
         assert arr._capacity == 3
 
     def test_batch_insert_empty_array(self):
         """Test batch inserting into an empty array."""
+        uid = "uid1"
         arr = SortedBidArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=102.0, timestamp=2),
-            create_order(price=101.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=102.0, timestamp=2),
+            create_order(uid=uid, price=101.0, timestamp=3),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -313,12 +321,13 @@ class TestSortedBidArray:
 
     def test_batch_insert_exceeds_max_size(self):
         """Test batch insert when orders exceed max_size."""
+        uid = "uid1"
         arr = SortedBidArray(max_size=3)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=102.0, timestamp=3),
-            create_order(price=103.0, timestamp=4),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=101.0, timestamp=2),
+            create_order(uid=uid, price=102.0, timestamp=3),
+            create_order(uid=uid, price=103.0, timestamp=4),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -331,14 +340,15 @@ class TestSortedBidArray:
 
     def test_batch_insert_with_existing_orders(self):
         """Test batch insert when array already has orders."""
+        uid = "uid1"
         arr = SortedBidArray(max_size=10)
-        arr.insert(create_order(price=101.0, timestamp=1))
-        arr.insert(create_order(price=99.0, timestamp=2))
+        arr.insert(create_order(uid=uid, price=101.0, timestamp=1))
+        arr.insert(create_order(uid=uid, price=99.0, timestamp=2))
 
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=102.0, timestamp=4),
-            create_order(price=98.0, timestamp=5),
+            create_order(uid=uid, price=100.0, timestamp=3),
+            create_order(uid=uid, price=102.0, timestamp=4),
+            create_order(uid=uid, price=98.0, timestamp=5),
         ]
 
         result, far_end_orders = arr.batch_insert(orders)
@@ -351,11 +361,12 @@ class TestSortedBidArray:
 
     def test_batch_delete_existing_orders(self):
         """Test batch deleting existing orders."""
+        uid = "uid1"
         arr = SortedBidArray(max_size=10)
         orders = [
-            create_order(price=102.0, timestamp=1),
-            create_order(price=101.0, timestamp=2),
-            create_order(price=100.0, timestamp=3),
+            create_order(uid=uid, price=102.0, timestamp=1),
+            create_order(uid=uid, price=101.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
         ]
         for order in orders:
             arr.insert(order)
@@ -381,8 +392,9 @@ class TestBaseSortedCircularArray:
 
     def test_pop_single_element(self):
         """Test popping a single element."""
+        uid = "uid1"
         arr = BaseSortedCircularArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid=uid, price=100.0, timestamp=1)
         arr.orders[0] = order
         arr.tail = 1
 
@@ -394,8 +406,9 @@ class TestBaseSortedCircularArray:
 
     def test_pop_multiple_elements(self):
         """Test popping multiple elements in order."""
+        uid = "uid1"
         arr = BaseSortedCircularArray(max_size=10)
-        orders = [create_order(price=float(i), timestamp=i) for i in range(3)]
+        orders = [create_order(uid=uid, price=float(i), timestamp=i) for i in range(3)]
         for i, order in enumerate(orders):
             arr.orders[i] = order
         arr.tail = 3
@@ -417,8 +430,9 @@ class TestBaseSortedCircularArray:
 
     def test_peek_non_empty_array(self):
         """Test peeking at a non-empty array."""
+        uid = "uid1"
         arr = BaseSortedCircularArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid=uid, price=100.0, timestamp=1)
         arr.orders[0] = order
         arr.tail = 1
 
@@ -427,8 +441,9 @@ class TestBaseSortedCircularArray:
         assert result == order
         assert arr.head == 0  # peek should not modify the array
 
-    def test_peek_order(self):
-        """Test peeking at multiple orders."""
+        uid = "uid1"
+        arr = BaseSortedCircularArray(max_size=10)
+        orders = [create_order(uid=uid, price=float(i), timestamp=i) for i in range(5)]
         arr = BaseSortedCircularArray(max_size=10)
         orders = [create_order(price=float(i), timestamp=i) for i in range(5)]
         for i, order in enumerate(orders):
@@ -482,8 +497,9 @@ class TestBaseSortedCircularArray:
 
     def test_remove_existing_order(self):
         """Test removing an existing order."""
+        uid = "uid1"
         arr = BaseSortedCircularArray(max_size=10)
-        orders = [create_order(price=float(i), timestamp=i) for i in range(3)]
+        orders = [create_order(uid=uid, price=float(i), timestamp=i) for i in range(3)]
         for i, order in enumerate(orders):
             arr.orders[i] = order
         arr.tail = 3
@@ -513,19 +529,22 @@ class TestBaseSortedCircularArray:
         arr = BaseSortedCircularArray(max_size=10)
         assert len(arr) == 0
 
-        arr.orders[0] = create_order(price=100.0, timestamp=1)
+        uid = "uid1"
+        arr = BaseSortedCircularArray(max_size=10)
+        arr.orders[0] = create_order(uid=uid, price=100.0, timestamp=1)
         arr.tail = 1
         assert len(arr) == 1
 
-        arr.orders[1] = create_order(price=101.0, timestamp=2)
+        arr.orders[1] = create_order(uid=uid, price=101.0, timestamp=2)
         arr.tail = 2
         assert len(arr) == 2
 
     def test_circular_behavior(self):
         """Test circular array behavior when wrapping around."""
+        uid = "uid1"
         arr = BaseSortedCircularArray(max_size=5)
         # Fill array
-        orders = [create_order(price=float(i), timestamp=i) for i in range(5)]
+        orders = [create_order(uid=uid, price=float(i), timestamp=i) for i in range(5)]
         for i, order in enumerate(orders):
             arr.orders[i] = order
         arr.tail = 5
@@ -535,9 +554,9 @@ class TestBaseSortedCircularArray:
             arr.pop()
 
         # Add 2 more elements (should wrap around)
-        arr.orders[arr.tail] = create_order(price=100.0, timestamp=100)
+        arr.orders[arr.tail] = create_order(uid=uid, price=100.0, timestamp=100)
         arr.tail = (arr.tail + 1) % arr.max_size
-        arr.orders[arr.tail] = create_order(price=101.0, timestamp=101)
+        arr.orders[arr.tail] = create_order(uid=uid, price=101.0, timestamp=101)
         arr.tail = (arr.tail + 1) % arr.max_size
 
         assert len(arr) == 4  # 5 - 3 + 2 = 4
@@ -548,8 +567,9 @@ class TestBidSortedCircularArray:
 
     def test_push_empty_array(self):
         """Test pushing to an empty array."""
+        uid = "uid1"
         arr = BidSortedCircularArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid=uid, price=100.0, timestamp=1)
 
         arr.push(order)
 
@@ -559,10 +579,11 @@ class TestBidSortedCircularArray:
     def test_push_higher_price_first(self):
         """Test pushing orders with higher price first."""
         arr = BidSortedCircularArray(max_size=10)
+        uid = "uid1"
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=98.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=98.0, timestamp=3),
         ]
 
         for order in orders:
@@ -576,11 +597,12 @@ class TestBidSortedCircularArray:
 
     def test_push_lower_price_first(self):
         """Test pushing orders with lower price first."""
+        uid = "uid1"
         arr = BidSortedCircularArray(max_size=10)
         orders = [
-            create_order(price=98.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=100.0, timestamp=3),
+            create_order(uid=uid, price=98.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
         ]
 
         for order in orders:
@@ -594,11 +616,12 @@ class TestBidSortedCircularArray:
 
     def test_push_same_price_different_timestamp(self):
         """Test pushing orders with same price but different timestamps."""
+        uid = "uid1"
         arr = BidSortedCircularArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=100.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=100.0, timestamp=2),
         ]
 
         for order in orders:
@@ -612,11 +635,12 @@ class TestBidSortedCircularArray:
 
     def test_push_full_array_discard_lower_price(self):
         """Test that pushing to a full array discards lower price orders."""
+        uid = "uid1"
         arr = BidSortedCircularArray(max_size=3)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=98.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=98.0, timestamp=3),
         ]
 
         for order in orders:
@@ -625,7 +649,7 @@ class TestBidSortedCircularArray:
         assert len(arr) == 3
 
         # Push a lower price order
-        lower_order = create_order(price=97.0, timestamp=4)
+        lower_order = create_order(uid=uid, price=97.0, timestamp=4)
         arr.push(lower_order)
 
         # Lower price order should be discarded
@@ -634,11 +658,12 @@ class TestBidSortedCircularArray:
 
     def test_push_full_array_accept_higher_price(self):
         """Test that pushing to a full array accepts higher price orders."""
+        uid = "uid1"
         arr = BidSortedCircularArray(max_size=3)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=98.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=98.0, timestamp=3),
         ]
 
         for order in orders:
@@ -647,7 +672,7 @@ class TestBidSortedCircularArray:
         assert len(arr) == 3
 
         # Push a higher price order
-        higher_order = create_order(price=101.0, timestamp=4)
+        higher_order = create_order(uid=uid, price=101.0, timestamp=4)
         arr.push(higher_order)
 
         # Higher price order should be accepted
@@ -662,8 +687,9 @@ class TestAskSortedCircularArray:
 
     def test_push_empty_array(self):
         """Test pushing to an empty array."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=10)
-        order = create_order(price=100.0, timestamp=1)
+        order = create_order(uid=uid, price=100.0, timestamp=1)
 
         arr.push(order)
 
@@ -672,11 +698,12 @@ class TestAskSortedCircularArray:
 
     def test_push_lower_price_first(self):
         """Test pushing orders with lower price first."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=10)
         orders = [
-            create_order(price=98.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=100.0, timestamp=3),
+            create_order(uid=uid, price=98.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
         ]
 
         for order in orders:
@@ -690,11 +717,12 @@ class TestAskSortedCircularArray:
 
     def test_push_higher_price_first(self):
         """Test pushing orders with higher price first."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=98.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=98.0, timestamp=3),
         ]
 
         for order in orders:
@@ -708,11 +736,12 @@ class TestAskSortedCircularArray:
 
     def test_push_same_price_different_timestamp(self):
         """Test pushing orders with same price but different timestamps."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=10)
         orders = [
-            create_order(price=100.0, timestamp=3),
-            create_order(price=100.0, timestamp=1),
-            create_order(price=100.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=100.0, timestamp=2),
         ]
 
         for order in orders:
@@ -726,11 +755,12 @@ class TestAskSortedCircularArray:
 
     def test_push_full_array_discard_higher_price(self):
         """Test that pushing to a full array discards higher price orders."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=3)
         orders = [
-            create_order(price=98.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=100.0, timestamp=3),
+            create_order(uid=uid, price=98.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=100.0, timestamp=3),
         ]
 
         for order in orders:
@@ -739,7 +769,7 @@ class TestAskSortedCircularArray:
         assert len(arr) == 3
 
         # Push a higher price order
-        higher_order = create_order(price=101.0, timestamp=4)
+        higher_order = create_order(uid=uid, price=101.0, timestamp=4)
         arr.push(higher_order)
 
         # Higher price order should be discarded
@@ -748,11 +778,12 @@ class TestAskSortedCircularArray:
 
     def test_push_full_array_accept_lower_price(self):
         """Test that pushing to a full array accepts lower price orders."""
+        uid = "uid1"
         arr = AskSortedCircularArray(max_size=3)
         orders = [
-            create_order(price=100.0, timestamp=1),
-            create_order(price=99.0, timestamp=2),
-            create_order(price=98.0, timestamp=3),
+            create_order(uid=uid, price=100.0, timestamp=1),
+            create_order(uid=uid, price=99.0, timestamp=2),
+            create_order(uid=uid, price=98.0, timestamp=3),
         ]
 
         for order in orders:
@@ -761,7 +792,7 @@ class TestAskSortedCircularArray:
         assert len(arr) == 3
 
         # Push a lower price order
-        lower_order = create_order(price=97.0, timestamp=4)
+        lower_order = create_order(uid=uid, price=97.0, timestamp=4)
         arr.push(lower_order)
 
         # Lower price order should be accepted
