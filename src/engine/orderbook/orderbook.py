@@ -1,7 +1,7 @@
 import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
-from src.engine.orderbook.orderbook import OrderBookInterface
+from src.engine.orderbook.ob_interface import OrderBookInterface
 
 class BaseSortedCircularArray:
     def __init__(self, max_size=200):

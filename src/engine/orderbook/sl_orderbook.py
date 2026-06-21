@@ -9,7 +9,7 @@ import threading
 from typing import Tuple, List, Optional, Dict
 
 from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
-from src.engine.orderbook.orderbook import OrderBookInterface
+from src.engine.orderbook.ob_interface import OrderBookInterface
 
 MAX_NEAR_SIZE = 1_000
 
