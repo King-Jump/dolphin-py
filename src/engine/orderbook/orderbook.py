@@ -1,6 +1,7 @@
 import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
+from src.engine.orderbook.orderbook import OrderBookInterface
 
 class BaseSortedCircularArray:
     def __init__(self, max_size=200):
@@ -255,7 +256,7 @@ class AskSortedCircularArray(BaseSortedCircularArray):
 
 
 
-class OrderBook:
+class OrderBook(OrderBookInterface):
     def __init__(self, symbol="BTCUSDT"):
         self.symbol = symbol
         self.bids = BidSortedCircularArray()
@@ -286,7 +287,25 @@ class OrderBook:
             del self.orders[order_id]
             return order
 
-    def get_order(self, order_id):
+    def batch_add_orders(self, side: str, orders: List[Order]) -> List[Order]:
+        """ 批量添加订单
+        """
+        with self.lock:
+            for order in orders:
+                self.add_order(order)
+            return orders
+
+    def batch_remove_orders(self, side: str, order_ids: List[str]) -> List[str]:
+        """ 批量删除订单
+        """
+        with self.lock:
+            for order_id in order_ids:
+                self.remove_order(order_id)
+            return order_ids
+
+    def get_order(self, order_id: str) -> Optional[Order]:
+        """ 获取订单
+        """
         with self.lock:
             return self.orders.get(order_id)
     
@@ -303,12 +322,34 @@ class OrderBook:
             order_book.timestamp = int(time.time() * 1000)
             return order_book
 
-    def get_best_bid(self):
+    def get_best_bid(self) -> Optional[Order]:
+        """ 获取最佳买单价格
+        """
         with self.lock:
-            best_bid = self.bids.peek()
-            return best_bid.price if best_bid else 0
+            return self.bids.peek()
 
-    def get_best_ask(self):
+    def get_best_ask(self) -> Optional[Order]:
+        """ 获取最佳卖单价格
+        """
         with self.lock:
-            best_ask = self.asks.peek()
-            return best_ask.price if best_ask else 0
+            return self.asks.peek()
+
+    def update_order(self, order_id: str, filled_quantity: float):
+        """更新订单成交数量
+        """
+        with self.lock:
+            order = self.orders.get(order_id)
+            if not order:
+                return None
+
+            order.filled_quantity = filled_quantity
+            if order.filled_quantity >= order.quantity:
+                self.remove_order(order_id)
+            return order
+
+    def pending_orders(self, uid: str) -> List[Order]:
+        """ 获取用户待成交订单
+        """
+        with self.lock:
+            return [order for order in self.orders.values() if order.user_id == uid]
+        

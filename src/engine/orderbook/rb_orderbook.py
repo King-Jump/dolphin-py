@@ -1,7 +1,7 @@
 import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
-
+from src.engine.orderbook.orderbook import OrderBookInterface
 
 class RBNode:
     """
@@ -560,7 +560,7 @@ class AskRedBlackTree(RedBlackTree):
         return depth
 
 
-class OrderBook:
+class OrderBook(OrderBookInterface):
     """
     基于红黑树的订单簿
     
@@ -607,6 +607,20 @@ class OrderBook:
             del self.orders[order_id]
             return order
 
+    def batch_add_orders(self, side, orders):
+        """批量添加订单"""
+        with self.lock:
+            for order in orders:
+                self.add_order(order)
+            return orders
+
+    def batch_remove_orders(self, side, order_ids):
+        """批量删除订单"""
+        with self.lock:
+            for order_id in order_ids:
+                self.remove_order(order_id)
+            return order_ids
+
     def get_order(self, order_id):
         """获取指定订单"""
         with self.lock:
@@ -621,17 +635,15 @@ class OrderBook:
             order_book.timestamp = int(time.time() * 1000)
             return order_book
 
-    def get_best_bid(self):
+    def get_best_bid(self) -> Optional[Order]:
         """获取最佳买价"""
         with self.lock:
-            best_bid = self.bids.peek()
-            return best_bid.price if best_bid else 0
+            return self.bids.peek()
 
-    def get_best_ask(self):
+    def get_best_ask(self) -> Optional[Order]:
         """获取最佳卖价"""
         with self.lock:
-            best_ask = self.asks.peek()
-            return best_ask.price if best_ask else 0
+            return self.asks.peek()
 
     def update_order(self, order_id, filled_quantity):
         """更新订单成交数量"""
@@ -643,3 +655,8 @@ class OrderBook:
             if order.filled_quantity >= order.quantity:
                 self.remove_order(order_id)
             return order
+
+    def pending_orders(self, uid) -> list[Order]:
+        """获取用户所有待处理订单"""
+        with self.lock:
+            return [order for order in self.orders.values() if order.uid == uid]

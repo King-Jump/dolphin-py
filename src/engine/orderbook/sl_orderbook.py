@@ -9,6 +9,7 @@ import threading
 from typing import Tuple, List, Optional, Dict
 
 from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
+from src.engine.orderbook.orderbook import OrderBookInterface
 
 MAX_NEAR_SIZE = 1_000
 
@@ -796,7 +797,7 @@ class BidSkipList(SkipList):
         return True
 
 
-class OrderBook:
+class OrderBook(OrderBookInterface):
     """
     基于双向队列和跳表的订单簿
     
@@ -944,8 +945,9 @@ class OrderBook:
                         del self.orders[order_id]
                 return removed_ids + far_removed_ids
 
-    def get_order(self, order_id):
-        """获取指定订单"""
+    def get_order(self, order_id: str) -> Optional[Order]:
+        """ 获取指定订单
+        """
         return self.orders.get(order_id)
 
     def get_order_book(self, depth=30) -> OrderBookModel:
@@ -979,8 +981,9 @@ class OrderBook:
         order_book.timestamp = int(time.time() * 1000)
         return order_book
 
-    def get_best_bid(self) -> Order:
-        """获取最佳买价"""
+    def get_best_bid(self) -> Optional[Order]:
+        """ 获取最佳买单价格
+        """
         with self.bid_lock:
             if not self.near_bids.is_empty():
                 oid = self.near_bids.peek()
@@ -988,7 +991,7 @@ class OrderBook:
 
             return self.far_bids.peek()
 
-    def get_best_ask(self) -> Order:
+    def get_best_ask(self) -> Optional[Order]:
         """获取最佳卖价"""
         with self.ask_lock:
             if not self.near_asks.is_empty():
