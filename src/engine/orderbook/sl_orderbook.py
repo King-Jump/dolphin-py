@@ -104,12 +104,12 @@ class SortedBaseArray:
             if price != curr_price:
                 depth.append((curr_price, curr_qty))
                 level += 1
-                if level > depth:
+                if level > len(depth):
                     break
                 curr_price, curr_qty = price, order_info[oid].quantity - order_info[oid].filled_quantity
             curr_qty += order_info[oid].quantity - order_info[oid].filled_quantity
 
-        if level <= depth:
+        if level <= len(depth):
             depth.append((curr_price, curr_qty))
         return depth
 
@@ -645,14 +645,14 @@ class SkipList:
             if price != curr_price:
                 depth.append((curr_price, curr_qty))
                 level += 1
-                if level > depth:
+                if level > len(depth):
                     break
 
                 curr_price = price
                 curr_qty = qty
             else:
                 curr_qty += qty
-        if level <= depth:
+        if level <= len(depth):
             depth.append((curr_price, curr_qty))
         return depth
 
