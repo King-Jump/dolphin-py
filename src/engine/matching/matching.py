@@ -232,14 +232,14 @@ class MatchingEngine:
 
         return trades
 
-    def cancel_order(self, symbol, order_id):
+    def cancel_order(self, uid, symbol, order_id):
         order_book = self.get_order_book(symbol)
         order = order_book.remove_order(order_id)
-        if order:
+        if order and order.uid == uid:
             order.status = OrderStatus.CANCELED
         else:
             # If the order doesn't exist, return an empty order with canceled status
-            order = empty_order(order_id, symbol)
+            order = empty_order(uid, order_id, symbol)
         return order
 
     def get_order(self, symbol, order_id):
@@ -332,7 +332,7 @@ class MatchingEngine:
                 order.status = OrderStatus.CANCELED
                 results.append(order)
             else:
-                results.append(empty_order(order.uid, order_id, symbol))
+                results.append(empty_order(uid, order_id, symbol))
 
         return results
 
