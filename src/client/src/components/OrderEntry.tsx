@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { createOrder } from '../api/client';
+import { randomPresetUid } from '../constants/uids';
 import type { NewOrderResult, OrderSide, OrderType } from '../types/api';
 import { isLoggedIn } from '../utils/auth';
 import { LoginModal } from './LoginModal';
@@ -59,6 +60,7 @@ export function OrderEntry({ symbol, pricePlaceholder }: OrderEntryProps) {
     try {
       setSubmitting(true);
       const res = await createOrder({
+        uid: randomPresetUid(),
         symbol,
         side,
         type,

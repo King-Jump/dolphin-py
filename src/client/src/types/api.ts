@@ -31,6 +31,7 @@ export type OrderSide = 'BUY' | 'SELL';
 export type OrderType = 'LIMIT' | 'MARKET';
 
 export interface NewOrderRequest {
+  uid: string;
   symbol: string;
   side: OrderSide;
   type: OrderType;
