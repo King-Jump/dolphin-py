@@ -1007,3 +1007,7 @@ class OrderBook:
         if order.filled_quantity >= order.quantity:
             self.remove_order(order_id)
         return order
+
+    def pending_orders(self, uid):
+        """获取用户所有待处理订单"""
+        return [order for order in self.orders.values() if order.uid == uid]

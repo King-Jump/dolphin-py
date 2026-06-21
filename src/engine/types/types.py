@@ -54,7 +54,8 @@ class Order:
 
 # Trade model
 class Trade:
-    def __init__(self, trade_id, symbol, price, quantity, buy_order_id, sell_order_id):
+    def __init__(self, uid, trade_id, symbol, price, quantity, buy_order_id, sell_order_id):
+        self.uid = uid
         self.trade_id = trade_id
         self.symbol = symbol
         self.price = price
@@ -65,6 +66,7 @@ class Trade:
 
     def to_dict(self):
         return {
+            "uid": self.uid,
             "tradeId": self.trade_id,
             "symbol": self.symbol,
             "price": self.price,
@@ -130,9 +132,9 @@ def empty_order(uid, order_id, symbol):
     return order
 
 # Create new trade
-def new_trade(symbol, price, quantity, buy_order_id, sell_order_id):
+def new_trade(uid, symbol, price, quantity, buy_order_id, sell_order_id):
     trade_id = str(uuid.uuid4())
-    return Trade(trade_id, symbol, price, quantity, buy_order_id, sell_order_id)
+    return Trade(uid, trade_id, symbol, price, quantity, buy_order_id, sell_order_id)
 
 # Create new order book
 def new_order_book(symbol):

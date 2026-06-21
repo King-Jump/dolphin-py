@@ -21,8 +21,12 @@ class FuturesHandler:
             symbol = data.get('symbol')
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
+            uid = data.get('uid')
+            if not uid:
+                return jsonify({"code": 400, "msg": "uid is required"}), 400
             
             trades, order = global_futures_engine.create_order(
+                uid=uid,
                 symbol=symbol,
                 side=data.get('side'),
                 order_type=data.get('type'),
@@ -34,6 +38,7 @@ class FuturesHandler:
                 return jsonify({
                     "code": 200,
                     "data": {
+                        "uid": uid,
                         "symbol": order.symbol,
                         "orderId": order.order_id,
                         "clientOrderId": order.client_order_id,
@@ -53,8 +58,12 @@ class FuturesHandler:
     def new_batch_order(self, data):
         try:
             params = data.get('batchOrders', [])
-            _, orders = global_futures_engine.create_orders(params, is_futures=True)
+            uid = data.get('uid')
+            if not uid:
+                return jsonify({"code": 400, "msg": "uid is required"}), 400
+            _, orders = global_futures_engine.create_orders(uid, params, is_futures=True)
             results = [{
+                "uid": uid,
                 "symbol": order.symbol,
                 "orderId": order.order_id,
                 "clientOrderId": order.client_order_id,
@@ -79,11 +88,16 @@ class FuturesHandler:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
+            uid = args.get('uid')
+            if not uid:
+                return jsonify({"code": 400, "msg": "uid is required"}), 400
+            
             results = []
             for order_id in order_ids:
-                cancelled = global_futures_engine.cancel_order(symbol, order_id)
+                cancelled = global_futures_engine.cancel_order(uid, symbol, order_id)
                 if cancelled:
                     results.append({
+                        "uid": uid,
                         "symbol": cancelled.symbol,
                         "orderId": cancelled.order_id,
                         "clientOrderId": cancelled.client_order_id,
@@ -106,12 +120,16 @@ class FuturesHandler:
         symbol = args.get('symbol')
         if symbol and not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-
-        orders = global_futures_engine.get_open_orders(symbol)
+        uid = args.get('uid')
+        if not uid:
+            return jsonify({"code": 400, "msg": "uid is required"}), 400
+        
+        orders = global_futures_engine.get_open_orders(uid, symbol)
         return jsonify({
             "code": 200,
             "data": [
                 {
+                    "uid": uid,
                     "symbol": order.symbol,
                     "orderId": order.order_id,
                     "clientOrderId": order.client_order_id,
@@ -130,18 +148,22 @@ class FuturesHandler:
         symbol = args.get('symbol')
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
-
+        uid = args.get('uid')
+        if not uid:
+            return jsonify({"code": 400, "msg": "uid is required"}), 400
+        
         side = args.get('side')
         price = args.get('price')
         quantity = args.get('quantity')
         if not side or not price or not quantity:
             return jsonify({'code': 500, 'data': "invalid parameter"})
 
-        global_futures_engine.append_trade(symbol, float(price), float(quantity))
+        global_futures_engine.append_trade(uid, symbol, float(price), float(quantity))
         global_futures_engine.update_klines(symbol, float(price), float(quantity))
         return jsonify({
             "code": 200,
             "data": {
+                "uid": uid,
                 "symbol": symbol,
                 'side': side,
                 "price": price,
@@ -160,6 +182,7 @@ class FuturesHandler:
         return jsonify({
             "code": 200,
             "data": {
+                "symbol": symbol,
                 "lastUpdateId": int(time.time() * 1000),
                 "bids": depth.bids,
                 "asks": depth.asks
@@ -218,12 +241,18 @@ class FuturesHandler:
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
+        uid = args.get('uid')
+        if not uid:
+            return jsonify({"code": 400, "msg": "uid is required"}), 400
+        
         limit = int(args.get('limit', 50))
-        trades = global_futures_engine.get_trades(symbol, limit)
+        trades = global_futures_engine.get_trades(uid, symbol, limit)
         return jsonify({
             "code": 200,
             "data": [
                 {
+                    "uid": uid,
+                    "symbol": symbol,
                     "id": trade.trade_id,
                     "price": str(trade.price),
                     "quantity": str(trade.quantity),
@@ -242,17 +271,21 @@ class FuturesHandler:
             return jsonify({"code": 400, "msg": "Symbol is required"}), 400
         if not order_id:
             return jsonify({"code": 400, "msg": "orderId is required"}), 400
-
+        uid = args.get('uid')
+        if not uid:
+            return jsonify({"code": 400, "msg": "uid is required"}), 400
+        
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
         order = global_futures_engine.get_order(symbol, order_id)
-        if not order:
+        if not order or order.uid != uid:
             return jsonify({"code": 404, "msg": "Order not found"}), 404
 
         return jsonify({
             "code": 200,
             "data": {
+                "uid": uid,
                 "symbol": order.symbol,
                 "orderId": order.order_id,
                 "clientOrderId": order.client_order_id,

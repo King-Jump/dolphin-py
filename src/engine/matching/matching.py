@@ -314,13 +314,13 @@ class MatchingEngine:
 
         return total_trades, buy_orders + sell_orders
 
-    def cancel_orders(self, symbol, order_ids):
+    def cancel_orders(self, uid, symbol, order_ids):
         # Simplified implementation, should find the corresponding order book based on order_id in practice
         order_book = self.get_order_book(symbol)
         results = []
         for order_id in order_ids:
             order = order_book.remove_order(order_id)
-            if order:
+            if order and order.uid == uid:
                 order.status = OrderStatus.CANCELED
                 results.append(order)
             else:
@@ -328,9 +328,9 @@ class MatchingEngine:
 
         return results
 
-    def get_open_orders(self, symbol=None):
+    def get_open_orders(self, uid, symbol=None):
         order_book = self.get_order_book(symbol)
-        return order_book.asks.peek_order(600) + order_book.bids.peek_order(600)
+        return order_book.pending_orders(uid)
 
     def _store_trades(self, symbol, trades):
         with self.lock:
@@ -341,16 +341,17 @@ class MatchingEngine:
             if len(self.trades[symbol]) > 1000:
                 self.trades[symbol] = self.trades[symbol][-1000:]
 
-    def get_trades(self, symbol, limit=50):
+    def get_trades(self, uid, symbol, limit=50):
         with self.lock:
             if symbol not in self.trades:
                 return []
-            return self.trades[symbol][-limit:]
+            return [trade for trade in self.trades[symbol] if trade.uid == uid][-limit:]
 
-    def append_trade(self, symbol, price, quantity):
+    def append_trade(self, uid, symbol, price, quantity):
         if symbol not in self.trades:
             self.trades[symbol] = []
         trade = new_trade(
+            uid,
             symbol,
             price,
             quantity,
