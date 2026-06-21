@@ -985,8 +985,7 @@ class OrderBook:
             if not self.near_bids.is_empty():
                 return self.near_bids.peek().price
 
-            order = self.far_bids.peek()
-            return order.price if order else 0
+            return self.far_bids.peek()
 
     def get_best_ask(self) -> float:
         """获取最佳卖价"""
@@ -994,8 +993,7 @@ class OrderBook:
             if not self.near_asks.is_empty():
                 return self.near_asks.peek().price
 
-            order = self.far_asks.peek()
-            return order.price if order else 0
+            return self.far_asks.peek()
 
     def update_order(self, order_id, filled_quantity):
         """更新订单成交数量"""

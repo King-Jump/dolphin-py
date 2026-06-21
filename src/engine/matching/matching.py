@@ -51,7 +51,7 @@ class MatchingEngine:
         if order.side == OrderSide.BUY:
             # Buy order matches sell orders
             while True:
-                best_ask = order_book.asks.peek()
+                best_ask = order_book.get_best_ask()
                 if not best_ask or best_ask.price > order.price:
                     break
 
@@ -98,7 +98,7 @@ class MatchingEngine:
         else:  # OrderSide.SELL
             # Sell order matches buy orders
             while True:
-                best_bid = order_book.bids.peek()
+                best_bid = order_book.get_best_bid()
                 if not best_bid or best_bid.price < order.price:
                     break
 
@@ -150,7 +150,7 @@ class MatchingEngine:
         if order.side == OrderSide.BUY:
             # Market buy order matches all sell orders
             while order.filled_quantity < order.quantity:
-                best_ask = order_book.asks.peek()
+                best_ask = order_book.get_best_ask()
                 if not best_ask:
                     break
 
@@ -184,7 +184,7 @@ class MatchingEngine:
         else:  # OrderSide.SELL
             # Market sell order matches all buy orders
             while order.filled_quantity < order.quantity:
-                best_bid = order_book.bids.peek()
+                best_bid = order_book.get_best_bid()
                 if not best_bid:
                     break
 
