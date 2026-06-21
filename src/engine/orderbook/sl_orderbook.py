@@ -6,6 +6,7 @@
 import time
 import random
 import threading
+import logging
 from typing import Tuple, List, Optional, Dict
 
 from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
