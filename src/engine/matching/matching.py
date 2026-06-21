@@ -62,11 +62,13 @@ class MatchingEngine:
 
                 # Generate trade
                 trade = new_trade(
-                    order.symbol,
-                    best_ask.price,
-                    match_quantity,
-                    order.order_id,
-                    best_ask.order_id
+                    taker_uid=order.uid,
+                    maker_uid=best_ask.uid,
+                    symbol=order.symbol,
+                    price=best_ask.price,
+                    quantity=match_quantity,
+                    buy_order_id=order.order_id,
+                    sell_order_id=best_ask.order_id
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
@@ -109,11 +111,13 @@ class MatchingEngine:
 
                 # Generate trade
                 trade = new_trade(
-                    order.symbol,
-                    best_bid.price,
-                    match_quantity,
-                    best_bid.order_id,
-                    order.order_id
+                    taker_uid=order.uid,
+                    maker_uid=best_bid.uid,
+                    symbol=order.symbol,
+                    price=best_bid.price,
+                    quantity=match_quantity,
+                    buy_order_id=best_bid.order_id,
+                    sell_order_id=order.order_id
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_bid.price, match_quantity)
@@ -161,11 +165,13 @@ class MatchingEngine:
 
                 # Generate trade
                 trade = new_trade(
-                    order.symbol,
-                    best_ask.price,
-                    match_quantity,
-                    order.order_id,
-                    best_ask.order_id
+                    taker_uid=order.uid,
+                    maker_uid=best_ask.uid,
+                    symbol=order.symbol,
+                    price=best_ask.price,
+                    quantity=match_quantity,
+                    buy_order_id=order.order_id,
+                    sell_order_id=best_ask.order_id
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
@@ -195,11 +201,13 @@ class MatchingEngine:
 
                 # Generate trade
                 trade = new_trade(
-                    order.symbol,
-                    best_bid.price,
-                    match_quantity,
-                    best_bid.order_id,
-                    order.order_id
+                    taker_uid=order.uid,
+                    maker_uid=best_bid.uid,
+                    symbol=order.symbol,
+                    price=best_bid.price,
+                    quantity=match_quantity,
+                    buy_order_id=best_bid.order_id,
+                    sell_order_id=order.order_id
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_bid.price, match_quantity)
