@@ -12,9 +12,10 @@ class DolphinClient:
         self.ws_callbacks = {}
     
     # Spot API Methods
-    def spot_new_order(self, symbol: str, side: str, order_type: str, quantity: str, price: Optional[str] = None, client_order_id: Optional[str] = None) -> Dict:
+    def spot_new_order(self, uid: str, symbol: str, side: str, order_type: str, quantity: str, price: Optional[str] = None, client_order_id: Optional[str] = None) -> Dict:
         url = f"{self.base_url}/api/v3/order"
         data = {
+            "uid": uid,
             "symbol": symbol,
             "side": side,
             "type": order_type,
@@ -27,41 +28,44 @@ class DolphinClient:
         response = requests.post(url, json=data)
         return response.json()
     
-    def spot_batch_orders(self, batch_orders: List[Dict]) -> Dict:
+    def spot_batch_orders(self, uid: str, batch_orders: List[Dict]) -> Dict:
         url = f"{self.base_url}/api/v3/batchOrders"
-        data = {"batchOrders": batch_orders}
+        data = {"uid": uid, "batchOrders": batch_orders}
         response = requests.post(url, json=data)
         return response.json()
     
-    def spot_cancel_orders(self, symbol: str, order_ids: str) -> Dict:
+    def spot_cancel_orders(self, uid: str, symbol: str, order_ids: str) -> Dict:
         url = f"{self.base_url}/api/v3/order"
         params = {
+            "uid": uid,
             "symbol": symbol,
             "orderIds": order_ids
         }
         response = requests.delete(url, params=params)
         return response.json()
     
-    def spot_get_open_orders(self, symbol: Optional[str] = None) -> Dict:
+    def spot_get_open_orders(self, uid: str, symbol: Optional[str] = None) -> Dict:
         url = f"{self.base_url}/api/v3/openOrders"
-        params = {}
+        params = {"uid": uid}
         if symbol:
             params["symbol"] = symbol
         response = requests.get(url, params=params)
         return response.json()
     
-    def spot_order_status(self, symbol: str, order_id: str) -> Dict:
+    def spot_order_status(self, uid: str, symbol: str, order_id: str) -> Dict:
         url = f"{self.base_url}/api/v3/order"
         params = {
+            "uid": uid,
             "symbol": symbol,
             "orderId": order_id
         }
         response = requests.get(url, params=params)
         return response.json()
     
-    def spot_mock_trade(self, symbol: str, side: str, price: str, quantity: str) -> Dict:
+    def spot_mock_trade(self, uid: str, symbol: str, side: str, price: str, quantity: str) -> Dict:
         url = f"{self.base_url}/api/v3/mock"
         data = {
+            "uid": uid,
             "symbol": symbol,
             "side": side,
             "price": price,
@@ -97,9 +101,10 @@ class DolphinClient:
         return response.json()
     
     # Futures API Methods
-    def futures_new_order(self, symbol: str, side: str, order_type: str, quantity: str, price: Optional[str] = None, client_order_id: Optional[str] = None) -> Dict:
+    def futures_new_order(self, uid: str, symbol: str, side: str, order_type: str, quantity: str, price: Optional[str] = None, client_order_id: Optional[str] = None) -> Dict:
         url = f"{self.base_url}/fapi/v1/order"
         data = {
+            "uid": uid,
             "symbol": symbol,
             "side": side,
             "type": order_type,
@@ -112,41 +117,44 @@ class DolphinClient:
         response = requests.post(url, json=data)
         return response.json()
     
-    def futures_batch_orders(self, batch_orders: List[Dict]) -> Dict:
+    def futures_batch_orders(self, uid: str, batch_orders: List[Dict]) -> Dict:
         url = f"{self.base_url}/fapi/v1/batchOrders"
-        data = {"batchOrders": batch_orders}
+        data = {"uid": uid, "batchOrders": batch_orders}
         response = requests.post(url, json=data)
         return response.json()
     
-    def futures_cancel_orders(self, symbol: str, order_ids: str) -> Dict:
+    def futures_cancel_orders(self, uid: str, symbol: str, order_ids: str) -> Dict:
         url = f"{self.base_url}/fapi/v1/order"
         params = {
+            "uid": uid,
             "symbol": symbol,
             "orderIds": order_ids
         }
         response = requests.delete(url, params=params)
         return response.json()
     
-    def futures_get_open_orders(self, symbol: Optional[str] = None) -> Dict:
+    def futures_get_open_orders(self, uid: str, symbol: Optional[str] = None) -> Dict:
         url = f"{self.base_url}/fapi/v1/openOrders"
-        params = {}
+        params = {"uid": uid}
         if symbol:
             params["symbol"] = symbol
         response = requests.get(url, params=params)
         return response.json()
     
-    def futures_order_status(self, symbol: str, order_id: str) -> Dict:
+    def futures_order_status(self, uid: str, symbol: str, order_id: str) -> Dict:
         url = f"{self.base_url}/fapi/v1/order"
         params = {
+            "uid": uid,
             "symbol": symbol,
             "orderId": order_id
         }
         response = requests.get(url, params=params)
         return response.json()
     
-    def futures_mock_trade(self, symbol: str, side: str, price: str, quantity: str) -> Dict:
+    def futures_mock_trade(self, uid: str, symbol: str, side: str, price: str, quantity: str) -> Dict:
         url = f"{self.base_url}/fapi/v3/mock"
         data = {
+            "uid": uid,
             "symbol": symbol,
             "side": side,
             "price": price,
