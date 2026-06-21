@@ -856,7 +856,7 @@ class OrderBook(OrderBookInterface):
         result = False
         if order.side == OrderSide.BUY:
             with self.bid_lock:
-                if self.far_bids.size() > 0 and compare_order(order, self.far_bids.peek()) > 0:
+                if self.far_bids.size() == 0 or compare_order(order, self.far_bids.peek()) > 0:
                     # order > first bid in far-end orders
                     result = self.near_bids.delete(order)
                     move_in_num = self.near_bids.move_in_num()
@@ -871,7 +871,7 @@ class OrderBook(OrderBookInterface):
                     result = self.far_bids.delete(order)
         else:
             with self.ask_lock:
-                if self.far_asks.size() > 0 and compare_order(order, self.far_asks.peek()) < 0:
+                if self.far_asks.size() == 0 or compare_order(order, self.far_asks.peek()) < 0:
                     # order < first ask in far-end orders
                     result = self.near_asks.delete(order)
                     move_in_num = self.near_asks.move_in_num()
