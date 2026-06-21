@@ -133,10 +133,10 @@ class SpotHandler:
         if symbol and not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
-        if not data.get('uid'):
+        if not args.get('uid'):
             return jsonify({"code": 400, "msg": "uid is required"}), 400
 
-        orders = global_spot_engine.get_open_orders(uid=data['uid'], symbol=symbol)
+        orders = global_spot_engine.get_open_orders(uid=args['uid'], symbol=symbol)
         logger.debug(f"open_orders: {orders}")
         return jsonify({
             "code": 200,
@@ -162,7 +162,7 @@ class SpotHandler:
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
-        if not data.get('uid'):
+        if not args.get('uid'):
             return jsonify({"code": 400, "msg": "uid is required"}), 400
         
         side = args.get('side')
@@ -171,12 +171,12 @@ class SpotHandler:
         if not side or not price or not quantity:
             return jsonify({'code': 500, 'data': "invalid parameter"})
 
-        global_spot_engine.append_trade(uid=data['uid'], symbol=symbol, price=float(price), quantity=float(quantity))
+        global_spot_engine.append_trade(uid=args['uid'], symbol=symbol, price=float(price), quantity=float(quantity))
         global_spot_engine.update_klines(symbol, float(price), float(quantity))
         return jsonify({
             "code": 200,
             "data": {
-                "uid": data['uid'],
+                "uid": args['uid'],
                 "symbol": symbol,
                 'side': side,
                 "price": price,
@@ -253,7 +253,7 @@ class SpotHandler:
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
-        uid = data.get('uid')
+        uid = args.get('uid')
         if not uid:
             return jsonify({"code": 400, "msg": "uid is required"}), 400
 
@@ -283,7 +283,7 @@ class SpotHandler:
         if not order_id:
             return jsonify({"code": 400, "msg": "orderId is required"}), 400
 
-        uid = data.get('uid')
+        uid = args.get('uid')
         if not uid:
             return jsonify({"code": 400, "msg": "uid is required"}), 400
 
