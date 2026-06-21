@@ -349,16 +349,17 @@ class MatchingEngine:
             if len(self.trades[symbol]) > 1000:
                 self.trades[symbol] = self.trades[symbol][-1000:]
 
-    def get_trades(self, uid, symbol, limit=50):
+    def get_trades(self, symbol, limit=50):
         with self.lock:
             if symbol not in self.trades:
                 return []
-            return [trade for trade in self.trades[symbol] if trade.uid == uid][-limit:]
+            return self.trades[symbol][-limit:]
 
     def append_trade(self, uid, symbol, price, quantity):
         if symbol not in self.trades:
             self.trades[symbol] = []
         trade = new_trade(
+            uid,
             uid,
             symbol,
             price,
