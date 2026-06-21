@@ -826,7 +826,7 @@ class OrderBook(OrderBookInterface):
         self.orders = {}
         self.ask_lock = threading.RLock()
         self.bid_lock = threading.RLock()
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
 
     def add_order(self, order):
         """添加订单到订单簿"""
