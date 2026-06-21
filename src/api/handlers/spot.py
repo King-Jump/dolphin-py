@@ -95,16 +95,16 @@ class SpotHandler:
             traceback.print_exc()
             return jsonify({"code": 500, "msg": str(e)}), 500
 
-    def cancel_orders(self, symbol, order_ids):
+    def cancel_orders(self, uid, symbol, order_ids):
         try:
-            if not data.get('uid'):
+            if not uid:
                 return jsonify({"code": 400, "msg": "uid is required"}), 400
 
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
             results = global_spot_engine.cancel_orders(
-                uid=data['uid'],
+                uid=uid,
                 symbol=symbol,
                 order_ids=order_ids
             )

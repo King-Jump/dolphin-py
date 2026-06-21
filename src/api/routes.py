@@ -21,7 +21,9 @@ def spot_new_batch_order():
 @app.route('/api/v3/order', methods=['DELETE'])
 @local_only
 def spot_cancel_order():
-    return spot_handler.cancel_orders(request.args.get('symbol'),
+    return spot_handler.cancel_orders(
+        request.args.get('uid'),
+        request.args.get('symbol'),
         request.args.get('orderIds').split(','))
 
 @app.route('/api/v3/openOrders', methods=['GET'])
@@ -72,7 +74,9 @@ def futures_new_batch_order():
 @app.route('/fapi/v1/order', methods=['DELETE'])
 @local_only
 def futures_cancel_orders():
-    return futures_handler.cancel_orders(request.args.get('symbol'),
+    return futures_handler.cancel_orders(
+        request.args.get('uid'),
+        request.args.get('symbol'),
         request.args.get('orderIds').split(','))
 
 @app.route('/fapi/v1/openOrders', methods=['GET'])

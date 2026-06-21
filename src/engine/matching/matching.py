@@ -272,7 +272,7 @@ class MatchingEngine:
             ) for param in params if param.get('side') == OrderSide.BUY]
         buy_orders.sort(key=lambda x: x.price, reverse=True)
 
-        sell_orders = [Order(
+        sell_orders = [Order(uid,
                 symbol=param.get('symbol'),
                 client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
                 side=param.get('side'),
