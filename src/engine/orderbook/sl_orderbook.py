@@ -80,12 +80,12 @@ class SortedBaseArray:
     def is_empty(self) -> bool:
         return self._capacity == 0
 
-    def peek(self) -> Optional[float]:
+    def peek(self) -> Optional[str]:
         """ peek the first order in the array
         """
         if self._capacity == 0:
             return None
-        return self._values[0][1] # order id, price, timestamp
+        return self._values[0][0] # order id, price, timestamp
 
     def peek_depth(self, depth: int, order_info: Dict[str, Order]) -> List[Tuple[float, float]]:
         """ peek the first depth orders in the array
@@ -983,7 +983,8 @@ class OrderBook:
         """获取最佳买价"""
         with self.bid_lock:
             if not self.near_bids.is_empty():
-                return self.near_bids.peek()
+                oid = self.near_bids.peek()
+                return self.orders[oid]
 
             return self.far_bids.peek()
 
@@ -991,7 +992,8 @@ class OrderBook:
         """获取最佳卖价"""
         with self.ask_lock:
             if not self.near_asks.is_empty():
-                return self.near_asks.peek()
+                oid = self.near_asks.peek()
+                return self.orders[oid]
 
             return self.far_asks.peek()
 
