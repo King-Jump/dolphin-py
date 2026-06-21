@@ -979,19 +979,19 @@ class OrderBook:
         order_book.timestamp = int(time.time() * 1000)
         return order_book
 
-    def get_best_bid(self) -> float:
+    def get_best_bid(self) -> Order:
         """获取最佳买价"""
         with self.bid_lock:
             if not self.near_bids.is_empty():
-                return self.near_bids.peek().price
+                return self.near_bids.peek()
 
             return self.far_bids.peek()
 
-    def get_best_ask(self) -> float:
+    def get_best_ask(self) -> Order:
         """获取最佳卖价"""
         with self.ask_lock:
             if not self.near_asks.is_empty():
-                return self.near_asks.peek().price
+                return self.near_asks.peek()
 
             return self.far_asks.peek()
 
