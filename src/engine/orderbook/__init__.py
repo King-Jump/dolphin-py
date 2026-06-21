@@ -1,5 +1,5 @@
 from typing import Optional, List
-from src.engine.orderbook.order import Order, OrderBook
+from src.engine.types.types import Order, OrderBook
 
 
 class OrderBookInterface:
