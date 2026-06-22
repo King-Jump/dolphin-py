@@ -307,7 +307,7 @@ class MatchingEngine:
                     total_trades.extend(trades)
                 continue
 
-            order_book.batch_add_orders(OrderSide.Sell, sell_orders[idx:])
+            order_book.batch_add_orders(OrderSide.SELL, sell_orders[idx:])
             break
 
         for idx, order in enumerate(buy_orders):
@@ -319,7 +319,7 @@ class MatchingEngine:
                     total_trades.extend(trades)
                 continue
 
-            order_book.batch_add_orders(OrderSide.Buy, buy_orders[idx:])
+            order_book.batch_add_orders(OrderSide.BUY, buy_orders[idx:])
             break
 
         return total_trades, buy_orders + sell_orders
