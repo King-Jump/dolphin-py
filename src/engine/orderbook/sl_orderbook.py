@@ -453,18 +453,18 @@ class SortedBidArray(SortedBaseArray):
             return True, far_end_orders, sub_orders
         else:
             # insert all orders to new-end array, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
+            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
                     condition = compare(self._values[read_idx], order)
-                    if condition > 0:
+                    if condition < 0:
                         # append read idx
                         self._values[write_idx] = self._values[read_idx]
                         write_idx -= 1
                         read_idx -= 1
-                    else: # condition < 0
+                    else: # condition > 0
                         # append order
                         self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx -= 1
