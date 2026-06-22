@@ -327,16 +327,7 @@ class MatchingEngine:
     def cancel_orders(self, uid, symbol, order_ids):
         # Simplified implementation, should find the corresponding order book based on order_id in practice
         order_book = self.get_order_book(symbol)
-        results = []
-        for order_id in order_ids:
-            order = order_book.remove_order(order_id)
-            if order and order.uid == uid:
-                order.status = OrderStatus.CANCELED
-                results.append(order)
-            else:
-                results.append(empty_order(uid, order_id, symbol))
-
-        return results
+        return order_book.batch_remove_orders(order_ids)
 
     def get_open_orders(self, uid, symbol=None):
         order_book = self.get_order_book(symbol)
