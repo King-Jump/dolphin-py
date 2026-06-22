@@ -19,9 +19,17 @@ class OrderStatus:
     CANCELED = "CANCELLED"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
 
+# Time in force
+class OrderTimeInForce:
+    GTC = "GTC"
+    IOC = "IOC"
+    FOK = "FOK"
+    BAIT = "BAIT"
+    GTX = "GTX"
+
 # Order model
 class Order:
-    def __init__(self, uid,symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):
+    def __init__(self, uid,symbol, side, order_type, time_in_force, quantity, price=None, client_order_id=None, is_futures=False, is_selftrade=False):
         self.order_id = str(uuid.uuid4())
         self.uid = uid
         self.client_order_id = client_order_id or str(uuid.uuid4())
@@ -30,11 +38,13 @@ class Order:
         self.type = order_type
         self.price = price
         self.quantity = quantity
+        self.time_in_force = time_in_force
         self.is_futures = is_futures
         self.filled_quantity = 0
         self.status = OrderStatus.PENDING
         self.timestamp = int(time.time() * 1000)
         self.update_timestamp = int(time.time() * 1000)
+        self.is_selftrade = is_selftrade
 
     def to_dict(self):
         return {
@@ -46,10 +56,12 @@ class Order:
             "type": self.type,
             "price": self.price,
             "origQty": self.quantity,
+            "timeInForce": self.time_in_force,
             "filled_quantity": self.filled_quantity,
             "status": self.status,
             "timestamp": self.timestamp,
-            "update_timestamp": self.update_timestamp
+            "update_timestamp": self.update_timestamp,
+            "isSelfTrade": self.is_selftrade
         }
 
 # Trade model
@@ -123,12 +135,12 @@ class Ticker:
         }
 
 # Create new order
-def new_order(uid, symbol, side, order_type, quantity, price):
-    return Order(uid, symbol, side, order_type, quantity, price)
+def new_order(uid, symbol, side, order_type, time_in_force, quantity, price):
+    return Order(uid, symbol, side, order_type, time_in_force, quantity, price)
 
 # Create empty order, i.e., order not in order book
 def empty_order(uid, order_id, symbol):
-    order = Order(uid, symbol, "BUY", "LIMIT", 0)
+    order = Order(uid, symbol, "BUY", "LIMIT", OrderTimeInForce.GTC, 0)
     order.order_id = order_id
     order.status = OrderStatus.CANCELED
     return order

@@ -2,6 +2,8 @@ import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
 from src.engine.orderbook.ob_interface import OrderBookInterface
+from typing import List, Optional, Tuple
+
 
 class RBNode:
     """
@@ -614,7 +616,7 @@ class OrderBook(OrderBookInterface):
                 self.add_order(order)
             return orders
 
-    def batch_remove_orders(self, side, order_ids):
+    def batch_remove_orders(self, order_ids):
         """批量删除订单"""
         with self.lock:
             for order_id in order_ids:

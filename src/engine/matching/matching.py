@@ -3,6 +3,7 @@ import logging
 from src.engine.orderbook.sl_orderbook import OrderBook
 from src.engine.types.types import (
     Order,
+    OrderTimeInForce,
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
 )
 import threading
@@ -267,7 +268,8 @@ class MatchingEngine:
         return trades, order
 
     def create_orders(self, uid, params, is_futures=False):
-        # batch create orders
+        """ batch create orders, discard market orders and IOC/FOK orders
+        """
         logger.debug(f"Creating orders with params: {params}")
         buy_orders = [Order(uid,
                 symbol=param.get('symbol'),
@@ -277,7 +279,7 @@ class MatchingEngine:
                 quantity=float(param.get('quantity')),
                 price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
-            ) for param in params if param.get('side') == OrderSide.BUY]
+            ) for param in params if param.get('side') == OrderSide.BUY and param.get('type') == OrderType.LIMIT and param.get('time_in_force') != OrderTimeInForce.IOC and param.get('time_in_force') != OrderTimeInForce.FOK]
         buy_orders.sort(key=lambda x: x.price, reverse=True)
 
         sell_orders = [Order(uid,
@@ -288,37 +290,35 @@ class MatchingEngine:
                 quantity=float(param.get('quantity')),
                 price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
-            ) for param in params if param.get('side') == OrderSide.SELL]
+            ) for param in params if param.get('side') == OrderSide.SELL and param.get('type') == OrderType.LIMIT and param.get('time_in_force') != OrderTimeInForce.IOC and param.get('time_in_force') != OrderTimeInForce.FOK]
         sell_orders.sort(key=lambda x: x.price)
-
+ 
         order_book = self.get_order_book(buy_orders[0].symbol if buy_orders else sell_orders[0].symbol)
 
         total_trades = []
-        skip_match = False 
-        for order in buy_orders:
+        for idx, order in enumerate(sell_orders):
             # Batch orders, simplified matching process
-            if skip_match:
-                order.status = OrderStatus.NEW
-                order_book.add_order(order)
-            else:
-                trades = self.process_order(order)
-                total_trades.extend(trades)
+            best_bid = order_book.get_best_bid()
+            if best_bid and best_bid.price >= order.price:
+                if order.time_in_force == OrderTimeInForce.GTC and order.is_selftrade:
+                    trades = self.process_order(order)
+                    total_trades.extend(trades)
+                continue
 
-            if order.status != OrderStatus.FILLED:
-                skip_match = True
+            order_book.batch_add_orders(OrderSide.Sell, sell_orders[idx:])
+            break
 
-        skip_match = False 
-        for order in sell_orders:
+        for idx, order in enumerate(buy_orders):
             # Batch orders, simplified matching process
-            if skip_match:
-                order.status = OrderStatus.NEW
-                order_book.add_order(order)
-            else:
-                trades = self.process_order(order)
-                total_trades.extend(trades)
+            best_ask = order_book.get_best_ask()
+            if best_ask and best_ask.price <= order.price:
+                if order.time_in_force == OrderTimeInForce.GTC and order.is_selftrade:
+                    trades = self.process_order(order)
+                    total_trades.extend(trades)
+                continue
 
-            if order.status != OrderStatus.FILLED:
-                skip_match = True
+            order_book.batch_add_orders(OrderSide.Buy, buy_orders[idx:])
+            break
 
         return total_trades, buy_orders + sell_orders
 

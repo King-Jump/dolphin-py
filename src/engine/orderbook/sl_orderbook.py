@@ -921,11 +921,22 @@ class OrderBook(OrderBookInterface):
                     if remain_orders:
                         self.far_asks.batch_insert(remain_orders)
 
-    def batch_remove_orders(self, side: str, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, order_ids: List[str]) -> List[str]:
         """批量移除订单"""
-        if side == OrderSide.BUY:
+        cancel_buy_orders = []
+        cancel_sell_orders = []
+        for order_id in order_ids:
+            order = self.orders.get(order_id)
+            if not order:
+                continue
+            if order.side == OrderSide.BUY:
+                cancel_buy_orders.append(order)
+            else:
+                cancel_sell_orders.append(order)
+
+        if cancel_buy_orders:
             with self.bid_lock:
-                removed_ids = self.near_bids.batch_delete([self.orders[oid] for oid in order_ids])
+                removed_ids = self.near_bids.batch_delete(cancel_buy_orders)
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]
@@ -934,9 +945,10 @@ class OrderBook(OrderBookInterface):
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
                 return removed_ids + far_removed_ids
-        else:
+
+        if cancel_sell_orders:
             with self.ask_lock:
-                removed_ids = self.near_asks.batch_delete([self.orders[oid] for oid in order_ids])
+                removed_ids = self.near_asks.batch_delete(cancel_sell_orders)
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]

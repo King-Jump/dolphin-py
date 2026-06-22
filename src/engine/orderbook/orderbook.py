@@ -2,6 +2,7 @@ import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
 from src.engine.orderbook.ob_interface import OrderBookInterface
+from typing import List, Optional, Tuple
 
 class BaseSortedCircularArray:
     def __init__(self, max_size=200):
@@ -295,7 +296,7 @@ class OrderBook(OrderBookInterface):
                 self.add_order(order)
             return orders
 
-    def batch_remove_orders(self, side: str, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, order_ids: List[str]) -> List[str]:
         """ 批量删除订单
         """
         with self.lock:
