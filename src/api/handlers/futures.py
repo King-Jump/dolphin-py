@@ -282,8 +282,8 @@ class FuturesHandler:
         if not self._validate_symbol(symbol):
             return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
-        order = global_futures_engine.get_order(symbol, order_id)
-        if not order or order.uid != uid:
+        order = global_futures_engine.get_order(uid, symbol, order_id)
+        if not order:
             return jsonify({"code": 404, "msg": "Order not found"}), 404
 
         return jsonify({

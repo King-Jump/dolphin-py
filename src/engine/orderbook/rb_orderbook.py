@@ -593,11 +593,11 @@ class OrderBook(OrderBookInterface):
             else:
                 self.asks.push(order)
 
-    def remove_order(self, order_id):
+    def remove_order(self, uid, order_id):
         """从订单簿移除订单"""
         with self.lock:
             order = self.orders.get(order_id)
-            if not order:
+            if not order or order.uid != uid:
                 return None
 
             key = (order.price, order.timestamp)
@@ -616,17 +616,20 @@ class OrderBook(OrderBookInterface):
                 self.add_order(order)
             return orders
 
-    def batch_remove_orders(self, order_ids):
+    def batch_remove_orders(self, uid, order_ids):
         """批量删除订单"""
         with self.lock:
             for order_id in order_ids:
-                self.remove_order(order_id)
+                self.remove_order(uid, order_id)
             return order_ids
 
-    def get_order(self, order_id):
+    def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """获取指定订单"""
         with self.lock:
-            return self.orders.get(order_id)
+            order = self.orders.get(order_id)
+            if order and order.uid == uid:
+                return order
+            return None
 
     def get_order_book(self, depth=30) -> OrderBookModel:
         """获取订单簿数据"""

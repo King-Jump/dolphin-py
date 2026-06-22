@@ -25,7 +25,7 @@ class OrderBookInterface:
         """
         raise NotImplementedError
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """ 获取订单
         """
         raise NotImplementedError

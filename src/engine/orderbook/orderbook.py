@@ -274,10 +274,10 @@ class OrderBook(OrderBookInterface):
             else:
                 self.asks.push(order)
 
-    def remove_order(self, order_id):
+    def remove_order(self, uid: str, order_id):
         with self.lock:
             order = self.orders.get(order_id)
-            if not order:
+            if not order or order.uid != uid:
                 return None
 
             # Remove from order book
@@ -297,19 +297,22 @@ class OrderBook(OrderBookInterface):
                 self.add_order(order)
             return orders
 
-    def batch_remove_orders(self, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[str]:
         """ 批量删除订单
         """
         with self.lock:
             for order_id in order_ids:
-                self.remove_order(order_id)
+                self.remove_order(uid, order_id)
             return order_ids
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """ 获取订单
         """
         with self.lock:
-            return self.orders.get(order_id)
+            order = self.orders.get(order_id)
+            if order and order.uid == uid:
+                return order
+            return None
     
     def get_order_book(self, depth=30) -> OrderBookModel:
         with self.lock:
@@ -336,22 +339,22 @@ class OrderBook(OrderBookInterface):
         with self.lock:
             return self.asks.peek()
 
-    def update_order(self, order_id: str, filled_quantity: float):
+    def update_order(self, uid: str, order_id: str, filled_quantity: float):
         """更新订单成交数量
         """
         with self.lock:
             order = self.orders.get(order_id)
-            if not order:
+            if not order or order.uid != uid:
                 return None
 
             order.filled_quantity = filled_quantity
             if order.filled_quantity >= order.quantity:
-                self.remove_order(order_id)
+                self.remove_order(uid, order_id)
             return order
 
     def pending_orders(self, uid: str) -> List[Order]:
         """ 获取用户待成交订单
         """
         with self.lock:
-            return [order for order in self.orders.values() if order.user_id == uid]
+            return [order for order in self.orders.values() if order.uid == uid]
         

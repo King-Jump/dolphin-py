@@ -130,7 +130,7 @@ class MatchingEngine:
                 # Check if buy order is fully filled
                 if best_bid.filled_quantity >= best_bid.quantity:
                     best_bid.status = OrderStatus.FILLED
-                    order_book.remove_order(best_bid.order_id)
+                    order_book.remove_order(best_bid.uid, best_bid.order_id)
                 else:
                     best_bid.status = OrderStatus.PARTIALLY_FILLED
 
@@ -184,7 +184,7 @@ class MatchingEngine:
                 # Check if sell order is fully filled
                 if best_ask.filled_quantity >= best_ask.quantity:
                     best_ask.status = OrderStatus.FILLED
-                    order_book.remove_order(best_ask.order_id)
+                    order_book.remove_order(best_ask.uid, best_ask.order_id)
                 else:
                     best_ask.status = OrderStatus.PARTIALLY_FILLED
 
@@ -220,7 +220,7 @@ class MatchingEngine:
                 # Check if buy order is fully filled
                 if best_bid.filled_quantity >= best_bid.quantity:
                     best_bid.status = OrderStatus.FILLED
-                    order_book.remove_order(best_bid.order_id)
+                    order_book.remove_order(best_bid.uid, best_bid.order_id)
                 else:
                     best_bid.status = OrderStatus.PARTIALLY_FILLED
 
@@ -235,7 +235,7 @@ class MatchingEngine:
 
     def cancel_order(self, uid, symbol, order_id):
         order_book = self.get_order_book(symbol)
-        order = order_book.remove_order(order_id)
+        order = order_book.remove_order(uid, order_id)
         if order and order.uid == uid:
             order.status = OrderStatus.CANCELLED
         else:
@@ -243,9 +243,9 @@ class MatchingEngine:
             order = empty_order(uid, order_id, symbol)
         return order
 
-    def get_order(self, symbol, order_id):
+    def get_order(self, uid, symbol, order_id):
         order_book = self.get_order_book(symbol)
-        return order_book.get_order(order_id)
+        return order_book.get_order(uid, order_id)
 
     def get_order_book_data(self, symbol, depth=30):
         order_book = self.get_order_book(symbol)
@@ -327,7 +327,7 @@ class MatchingEngine:
     def cancel_orders(self, uid, symbol, order_ids):
         # Simplified implementation, should find the corresponding order book based on order_id in practice
         order_book = self.get_order_book(symbol)
-        return order_book.batch_remove_orders(order_ids)
+        return order_book.batch_remove_orders(uid, order_ids)
 
     def get_open_orders(self, uid, symbol=None):
         order_book = self.get_order_book(symbol)

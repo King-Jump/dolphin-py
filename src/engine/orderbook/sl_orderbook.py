@@ -921,13 +921,13 @@ class OrderBook(OrderBookInterface):
                     if remain_orders:
                         self.far_asks.batch_insert(remain_orders)
 
-    def batch_remove_orders(self, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[str]:
         """批量移除订单"""
         cancel_buy_orders = []
         cancel_sell_orders = []
         for order_id in order_ids:
             order = self.orders.get(order_id)
-            if not order:
+            if not order or order.uid != uid:
                 continue
             if order.side == OrderSide.BUY:
                 cancel_buy_orders.append(order)
@@ -981,10 +981,13 @@ class OrderBook(OrderBookInterface):
 
         return total_removed_orders
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """ 获取指定订单
         """
-        return self.orders.get(order_id)
+        order = self.orders.get(order_id)
+        if order and order.uid == uid:
+            return order
+        return None
 
     def get_order_book(self, depth=30) -> OrderBookModel:
         """获取订单簿数据"""
