@@ -46,6 +46,9 @@ class Order:
         self.update_timestamp = int(time.time() * 1000)
         self.is_selftrade = is_selftrade
 
+    def __str__(self) -> str:
+        return self.order_id
+
     def to_dict(self):
         return {
             "uid": self.uid,
