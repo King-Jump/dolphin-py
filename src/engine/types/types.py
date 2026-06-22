@@ -16,7 +16,7 @@ class OrderStatus:
     PENDING = "PENDING"
     NEW = "NEW"
     FILLED = "FILLED"
-    CANCELED = "CANCELLED"
+    CANCELLED = "CANCELLED"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
 
 # Time in force
@@ -142,7 +142,7 @@ def new_order(uid, symbol, side, order_type, time_in_force, quantity, price):
 def empty_order(uid, order_id, symbol):
     order = Order(uid, symbol, "BUY", "LIMIT", OrderTimeInForce.GTC, 0)
     order.order_id = order_id
-    order.status = OrderStatus.CANCELED
+    order.status = OrderStatus.CANCELLED
     return order
 
 # Create new trade

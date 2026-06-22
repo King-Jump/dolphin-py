@@ -2,7 +2,8 @@ import time
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
 import threading
 from src.engine.orderbook.ob_interface import OrderBookInterface
-from typing import List, Optional, Tuple
+from typing import List, Optional
+
 
 class BaseSortedCircularArray:
     def __init__(self, max_size=200):
@@ -115,11 +116,11 @@ class BidSortedCircularArray(BaseSortedCircularArray):
             # Queue is full, remove lowest price order
             if order_price <= self.orders[tail - 1].price:
                 # New order price is not higher than tail order, discard new order
-                order.status = OrderStatus.CANCELED
+                order.status = OrderStatus.CANCELLED
                 return
             else:
                 # Remove tail order
-                self.orders[tail - 1].status = OrderStatus.CANCELED
+                self.orders[tail - 1].status = OrderStatus.CANCELLED
                 self.orders[tail - 1] = None
                 tail = (tail - 1 + self.max_size) % self.max_size
 
@@ -193,11 +194,11 @@ class AskSortedCircularArray(BaseSortedCircularArray):
             # Queue is full, remove highest price order
             if order_price >= self.orders[tail - 1].price:
                 # New order price is not lower than head order, discard new order
-                order.status = OrderStatus.CANCELED
+                order.status = OrderStatus.CANCELLED
                 return
             else:
                 # Remove tail order
-                self.orders[tail - 1].status = OrderStatus.CANCELED
+                self.orders[tail - 1].status = OrderStatus.CANCELLED
                 self.orders[tail - 1] = None
                 tail = (tail - 1 + self.max_size) % self.max_size
 

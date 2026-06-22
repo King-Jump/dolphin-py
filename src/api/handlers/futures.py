@@ -108,7 +108,7 @@ class FuturesHandler:
                         "price": cancelled.price,
                         "origQty": cancelled.quantity,
                         "executedQty": cancelled.filled_quantity,
-                        "status": "CANCELED",
+                        "status": cancelled.status,
                         "type": cancelled.type,
                         "side": cancelled.side
                     })

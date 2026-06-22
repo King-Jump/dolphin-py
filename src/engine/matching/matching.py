@@ -237,7 +237,7 @@ class MatchingEngine:
         order_book = self.get_order_book(symbol)
         order = order_book.remove_order(order_id)
         if order and order.uid == uid:
-            order.status = OrderStatus.CANCELED
+            order.status = OrderStatus.CANCELLED
         else:
             # If the order doesn't exist, return an empty order with canceled status
             order = empty_order(uid, order_id, symbol)

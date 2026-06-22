@@ -653,7 +653,7 @@ class TestBidSortedCircularArray:
         arr.push(lower_order)
 
         # Lower price order should be discarded
-        assert lower_order.status == OrderStatus.CANCELED
+        assert lower_order.status == OrderStatus.CANCELLED
         assert len(arr) == 3
 
     def test_push_full_array_accept_higher_price(self):
@@ -676,7 +676,7 @@ class TestBidSortedCircularArray:
         arr.push(higher_order)
 
         # Higher price order should be accepted
-        assert higher_order.status != OrderStatus.CANCELED
+        assert higher_order.status != OrderStatus.CANCELLED
         assert len(arr) == 3
         # Verify the lowest price order was removed
         assert arr.orders[2].price == 99.0
@@ -773,7 +773,7 @@ class TestAskSortedCircularArray:
         arr.push(higher_order)
 
         # Higher price order should be discarded
-        assert higher_order.status == OrderStatus.CANCELED
+        assert higher_order.status == OrderStatus.CANCELLED
         assert len(arr) == 3
 
     def test_push_full_array_accept_lower_price(self):
@@ -796,7 +796,7 @@ class TestAskSortedCircularArray:
         arr.push(lower_order)
 
         # Lower price order should be accepted
-        assert lower_order.status != OrderStatus.CANCELED
+        assert lower_order.status != OrderStatus.CANCELLED
         assert len(arr) == 3
         # Verify the highest price order was removed
         assert arr.orders[2].price == 99.0
