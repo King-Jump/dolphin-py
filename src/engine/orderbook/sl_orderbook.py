@@ -937,27 +937,45 @@ class OrderBook(OrderBookInterface):
         total_removed_orders = []
         if cancel_buy_orders:
             with self.bid_lock:
-                removed_ids = self.near_bids.batch_delete(cancel_buy_orders)
-                total_removed_orders.extend([order for order in cancel_buy_orders if order.order_id in removed_ids])
+                removed_ids = set(self.near_bids.batch_delete(cancel_buy_orders))
+                remain_orders = []
+                for order in cancel_buy_orders:
+                    if order.order_id in removed_ids:
+                        order.status = OrderStatus.CANCELLED
+                        total_removed_orders.append(order)
+                    else:
+                        remain_orders.append(order)
                 for order_id in removed_ids:
                     del self.orders[order_id]
-                remained_ids = [oid for oid in order_ids if oid not in removed_ids]
-                if remained_ids:
-                    far_removed_ids = self.far_bids.batch_delete([self.orders[oid] for oid in remained_ids])
-                    total_removed_orders.extend([order for order in far_removed_orders if order.order_id in far_removed_ids])
+
+                if remain_orders:
+                    far_removed_ids = self.far_bids.batch_delete(remain_orders)
+                    for order in remain_orders:
+                        if order.order_id in far_removed_ids:
+                            order.status = OrderStatus.CANCELLED
+                            total_removed_orders.append(order)
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
 
         if cancel_sell_orders:
             with self.ask_lock:
                 removed_ids = self.near_asks.batch_delete(cancel_sell_orders)
-                total_removed_orders.extend([order for order in cancel_sell_orders if order.order_id in removed_ids])
+                remain_orders = []
+                for order in cancel_sell_orders:
+                    if order.order_id in removed_ids:
+                        order.status = OrderStatus.CANCELLED
+                        total_removed_orders.append(order)
+                    else:
+                        remain_orders.append(order)
                 for order_id in removed_ids:
                     del self.orders[order_id]
-                remained_ids = [oid for oid in order_ids if oid not in removed_ids]
-                if remained_ids:
-                    far_removed_ids = self.far_asks.batch_delete([self.orders[oid] for oid in remained_ids])
-                    total_removed_orders.extend([order for order in far_removed_orders if order.order_id in far_removed_ids])
+
+                if remain_orders:
+                    far_removed_ids = self.far_asks.batch_delete(remain_orders)
+                    for order in remain_orders:
+                        if order.order_id in far_removed_ids:
+                            order.status = OrderStatus.CANCELLED
+                            total_removed_orders.append(order)
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
 
