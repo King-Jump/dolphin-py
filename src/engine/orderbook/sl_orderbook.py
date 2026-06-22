@@ -934,29 +934,34 @@ class OrderBook(OrderBookInterface):
             else:
                 cancel_sell_orders.append(order)
 
+        total_removed_ids = []
         if cancel_buy_orders:
             with self.bid_lock:
                 removed_ids = self.near_bids.batch_delete(cancel_buy_orders)
+                total_removed_ids.extend(removed_ids)
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]
                 if remained_ids:
                     far_removed_ids = self.far_bids.batch_delete([self.orders[oid] for oid in remained_ids])
+                    total_removed_ids.extend(far_removed_ids)
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
-                return removed_ids + far_removed_ids
 
         if cancel_sell_orders:
             with self.ask_lock:
                 removed_ids = self.near_asks.batch_delete(cancel_sell_orders)
+                total_removed_ids.extend(removed_ids)
                 for order_id in removed_ids:
                     del self.orders[order_id]
                 remained_ids = [oid for oid in order_ids if oid not in removed_ids]
                 if remained_ids:
                     far_removed_ids = self.far_asks.batch_delete([self.orders[oid] for oid in remained_ids])
+                    total_removed_ids.extend(far_removed_ids)
                     for order_id in far_removed_ids:
                         del self.orders[order_id]
-                return removed_ids + far_removed_ids
+
+        return total_removed_ids
 
     def get_order(self, order_id: str) -> Optional[Order]:
         """ 获取指定订单
