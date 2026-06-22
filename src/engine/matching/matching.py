@@ -251,12 +251,12 @@ class MatchingEngine:
         order_book = self.get_order_book(symbol)
         return order_book.get_order_book(depth)
 
-    def create_order(self, uid, symbol, side, order_type, quantity, price=None, client_order_id=None, is_futures=False):        
+    def create_order(self, uid, symbol, side, order_type, time_in_force, quantity, price=None, client_order_id=None, is_futures=False):
         logger.debug(f"create_order called with: symbol={symbol}, side={side}, order_type={order_type}, quantity={quantity}, price={price}, client_order_id={client_order_id}, is_futures={is_futures}")
         try:
             logger.debug(f"About to create Order with order_type={order_type}")
             # Let's try calling with positional arguments instead
-            order = Order(uid, symbol, side, order_type, quantity, price, client_order_id, is_futures)
+            order = Order(uid, symbol, side, order_type, time_in_force, quantity, price, client_order_id, is_futures)
             logger.debug(f"Order created successfully: {order.order_id} - {order.client_order_id}")
         except Exception as e:
             import traceback
@@ -276,6 +276,7 @@ class MatchingEngine:
                 client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
                 side=param.get('side'),
                 order_type=param.get('type'),
+                time_in_force=param.get('time_in_force'),
                 quantity=float(param.get('quantity')),
                 price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
@@ -287,6 +288,7 @@ class MatchingEngine:
                 client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
                 side=param.get('side'),
                 order_type=param.get('type'),
+                time_in_force=param.get('time_in_force'),
                 quantity=float(param.get('quantity')),
                 price=float(param.get('price')) if param.get('price') else 0,
                 is_futures=is_futures
