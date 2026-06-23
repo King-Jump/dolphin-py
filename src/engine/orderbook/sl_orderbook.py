@@ -585,8 +585,8 @@ class SkipList:
         if self.capacity >= self.max_node_size:
             self.free_nodes.extend([SkipNode(None, self.max_level, i+self.capacity) for i in range(self.max_node_size)])
             self.free_nodes_ptr.extend(range(self.max_node_size+1, self.max_node_size*2+1))
-            self.max_node_size *= 2
             self.free_ptr_head = self.max_node_size+1
+            self.max_node_size *= 2
 
         # allocate a new node from free node list
         node = self.free_nodes[self.free_ptr_head]
@@ -899,7 +899,7 @@ class OrderBook(OrderBookInterface):
         result = False
         if order.side == OrderSide.BUY:
             with self.bid_lock:
-                if self.far_bids.size() == 0 or compare_order(order, self.far_bids.peek()) > 0:
+                if self.far_bids.size() == 0 or compare_bid_order(order, self.far_bids.peek()) > 0:
                     # order > first bid in far-end orders
                     result = self.near_bids.delete(order)
                     # move some orders from far-end to near-end, since near-end array is nearly empty
@@ -915,7 +915,7 @@ class OrderBook(OrderBookInterface):
                     result = self.far_bids.delete(order)
         else:
             with self.ask_lock:
-                if self.far_asks.size() == 0 or compare_order(order, self.far_asks.peek()) < 0:
+                if self.far_asks.size() == 0 or compare_ask_order(order, self.far_asks.peek()) < 0:
                     # order < first ask in far-end orders
                     result = self.near_asks.delete(order)
                     move_in_num = self.near_asks.move_in_num()
