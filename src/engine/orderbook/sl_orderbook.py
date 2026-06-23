@@ -1001,11 +1001,11 @@ class OrderBook(OrderBookInterface):
                 best_far_ask = self.far_asks.peek()
                 if best_far_ask and best_far_ask.price == asks[-1][0]:
                     far_asks = self.far_asks.peek_depth(1)
-                    asks[-1][1] += far_asks[0][1]
+                    asks[-1] = (asks[-1][0], asks[-1][1] + far_asks[0][1])
             else:
                 far_asks = self.far_asks.peek_depth(depth - len(asks) + 1)
                 if far_asks and far_asks[0][0] == asks[-1][0]:
-                    asks[-1][1] += far_asks[0][1]
+                    asks[-1] = (asks[-1][0], asks[-1][1] + far_asks[0][1])
                     asks.extend(far_asks[1:])
             order_book.asks = asks
         with self.bid_lock:
@@ -1014,11 +1014,11 @@ class OrderBook(OrderBookInterface):
                 best_far_bid = self.far_bids.peek()
                 if best_far_bid and best_far_bid.price == bids[-1][0]:
                     far_bids = self.far_bids.peek_depth(1)
-                    bids[-1][1] += far_bids[0][1]
+                    bids[-1] = (bids[-1][0], bids[-1][1] + far_bids[0][1])
             else:
                 far_bids = self.far_bids.peek_depth(depth - len(bids) + 1)
                 if far_bids and far_bids[0][0] == bids[-1][0]:
-                    bids[-1][1] += far_bids[0][1]
+                    bids[-1] = (bids[-1][0], bids[-1][1] + far_bids[0][1])
                     bids.extend(far_bids[1:])
             order_book.bids = bids
 
