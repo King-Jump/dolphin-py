@@ -96,22 +96,22 @@ class SortedBaseArray:
             return []
 
         level = 0
-        depth = []
+        levels = []
         oid, price, _ = self._values[0]
         curr_price, curr_qty = price, order_info[oid].quantity - order_info[oid].filled_quantity
         for i in range(1, self._capacity):
             oid, price, _ = self._values[i]
             if price != curr_price:
-                depth.append((curr_price, curr_qty))
+                levels.append((curr_price, curr_qty))
                 level += 1
-                if level > len(depth):
+                if level > depth:
                     break
                 curr_price, curr_qty = price, order_info[oid].quantity - order_info[oid].filled_quantity
             curr_qty += order_info[oid].quantity - order_info[oid].filled_quantity
 
-        if level <= len(depth):
-            depth.append((curr_price, curr_qty))
-        return depth
+        if level <= depth:
+            levels.append((curr_price, curr_qty))
+        return levels
 
 
 class SortedAskArray(SortedBaseArray):
@@ -636,25 +636,25 @@ class SkipList:
             return []
 
         level = 0
-        depth = []
+        levels = []
         current = self.head.forward[0]
         curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
         while current.forward[0]:
             current = current.forward[0]
             price, qty = current.order.price, current.order.quantity - current.order.filled_quantity
             if price != curr_price:
-                depth.append((curr_price, curr_qty))
+                levels.append((curr_price, curr_qty))
                 level += 1
-                if level > len(depth):
+                if level > depth:
                     break
 
                 curr_price = price
                 curr_qty = qty
             else:
                 curr_qty += qty
-        if level <= len(depth):
-            depth.append((curr_price, curr_qty))
-        return depth
+        if level <= depth:
+            levels.append((curr_price, curr_qty))
+        return levels
 
 class AskSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
@@ -859,13 +859,14 @@ class OrderBook(OrderBookInterface):
                 if self.far_bids.size() == 0 or compare_order(order, self.far_bids.peek()) > 0:
                     # order > first bid in far-end orders
                     result = self.near_bids.delete(order)
+                    # move some orders from far-end to near-end, since near-end array is nearly empty
                     move_in_num = self.near_bids.move_in_num()
                     move_in_orders = []
                     for _ in range(move_in_num):
-                        order = self.far_bids.pop()
-                        if not order:
+                        far_order = self.far_bids.pop()
+                        if not far_order:
                             break
-                        move_in_orders.append(order)
+                        move_in_orders.append(far_order)
                     self.near_bids.batch_insert(move_in_orders)
                 else:
                     result = self.far_bids.delete(order)
@@ -877,10 +878,10 @@ class OrderBook(OrderBookInterface):
                     move_in_num = self.near_asks.move_in_num()
                     move_in_orders = []
                     for _ in range(move_in_num):
-                        order = self.far_asks.pop()
-                        if not order:
+                        far_order = self.far_asks.pop()
+                        if not far_order:
                             break
-                        move_in_orders.append(order)
+                        move_in_orders.append(far_order)
                     self.near_asks.batch_insert(move_in_orders)
                 else:
                     result = self.far_asks.delete(order)
@@ -897,10 +898,11 @@ class OrderBook(OrderBookInterface):
         if side == OrderSide.BUY:
             with self.bid_lock:
                 result, move_out_ids, remain_orders = self.near_bids.batch_insert(orders)
+                remain_ids = set(order.order_id for order in remain_orders)
                 if result:
                     # batch insert success
                     for order in orders:
-                        if order.order_id in remain_orders:
+                        if order.order_id in remain_ids:
                             continue
                         self.orders[order.order_id] = order
                     if move_out_ids:
@@ -910,10 +912,11 @@ class OrderBook(OrderBookInterface):
         else:
             with self.ask_lock:
                 result, move_out_ids, remain_orders = self.near_asks.batch_insert(orders)
+                remain_ids = set(order.order_id for order in remain_orders)
                 if result:
                     # batch insert success
                     for order in orders:
-                        if order.order_id in remain_orders:
+                        if order.order_id in remain_ids:
                             continue
                         self.orders[order.order_id] = order
                     if move_out_ids:
@@ -995,7 +998,8 @@ class OrderBook(OrderBookInterface):
         with self.ask_lock:
             asks = self.near_asks.peek_depth(depth, self.orders)
             if len(asks) >= depth:
-                if self.far_asks.peek() == asks[-1][0]:
+                best_far_ask = self.far_asks.peek()
+                if best_far_ask and best_far_ask.price == asks[-1][0]:
                     far_asks = self.far_asks.peek_depth(1)
                     asks[-1][1] += far_asks[0][1]
             else:
@@ -1007,7 +1011,8 @@ class OrderBook(OrderBookInterface):
         with self.bid_lock:
             bids = self.near_bids.peek_depth(depth, self.orders)
             if len(bids) >= depth:
-                if self.far_bids.peek() == bids[-1][0]:
+                best_far_bid = self.far_bids.peek()
+                if best_far_bid and best_far_bid.price == bids[-1][0]:
                     far_bids = self.far_bids.peek_depth(1)
                     bids[-1][1] += far_bids[0][1]
             else:
