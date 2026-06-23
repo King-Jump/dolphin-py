@@ -14,28 +14,8 @@ from src.engine.orderbook.ob_interface import OrderBookInterface
 
 MAX_NEAR_SIZE = 1_000
 
-def compare(a: Tuple[str, float, int], b: Order) -> int:
-    """ compare two orders, first by price, second by timestamp
-    """
-    if a[0] == b.order_id:
-        return 0
 
-    if a[1] == b.price:
-        if a[2] < b.timestamp:
-            return -1
-        elif a[2] > b.timestamp:
-            return 1
-        else:
-            if a[0] < b.order_id:
-                return -1
-            else: # a[0] > b.order_id:
-                return 1
-    elif a[1] > b.price:
-        return 1
-    else: # a.price < b.price
-        return -1
-
-def compare_order(a: Order, b: Order) -> int:
+def compare_ask_order(a: Order, b: Order) -> int:
     """ compare two orders, first by price, second by timestamp
     """
     if a.order_id == b.order_id:
@@ -56,10 +36,30 @@ def compare_order(a: Order, b: Order) -> int:
     else: # a.price < b.price
         return -1
 
+def compare_bid_order(a: Order, b: Order) -> int:
+    """ compare two orders, first by price, second by timestamp
+    """
+    if a.order_id == b.order_id:
+        return 0
+
+    if a.price == b.price:
+        if a.timestamp < b.timestamp:
+            return 1
+        elif a.timestamp > b.timestamp:
+            return -1
+        else:
+            if a.order_id < b.order_id:
+                return -1
+            #elif a.order_id > b.order_id:
+            return 1
+    elif a.price > b.price:
+        return 1
+    else: # a.price < b.price
+        return -1
 
 class SortedBaseArray:
     def __init__(self, max_size=1_000, logger=None):
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
         self._values = [0] * max_size
         self._capacity = 0
         self.max_size = max_size
@@ -120,6 +120,27 @@ class SortedAskArray(SortedBaseArray):
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
 
+    def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
+        """ compare two orders, first by price, second by timestamp
+        """
+        if a[0] == b.order_id:
+            return 0
+
+        if a[1] == b.price:
+            if a[2] < b.timestamp:
+                return -1
+            elif a[2] > b.timestamp:
+                return 1
+            else:
+                if a[0] < b.order_id:
+                    return -1
+                else: # a[0] > b.order_id:
+                    return 1
+        elif a[1] > b.price:
+            return 1
+        else: # a.price < b.price
+            return -1
+
     def _bisearch(self, order: Order) -> Tuple[int, int]:
         """ binary search and return the offset and condition, in ascending order
             Assert: _values is not empty and not full, order < _values[-1]
@@ -127,7 +148,7 @@ class SortedAskArray(SortedBaseArray):
         start, end = 0, self._capacity - 1
         while start <= end:
             mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
+            condition = self._compare(self._values[mid], order)
             if condition < 0:
                 # mid < order
                 start = mid + 1
@@ -151,7 +172,7 @@ class SortedAskArray(SortedBaseArray):
             self._capacity += 1
             return True
 
-        if compare(self._values[self._capacity-1], order) < 0:
+        if self._compare(self._values[self._capacity-1], order) < 0:
             # append new order
             self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
@@ -184,7 +205,7 @@ class SortedAskArray(SortedBaseArray):
         start, end = 0, self._capacity - 1
         while start <= end:
             mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
+            condition = self._compare(self._values[mid], order)
             if condition < 0:
                 # mid < order
                 start = mid + 1
@@ -229,7 +250,7 @@ class SortedAskArray(SortedBaseArray):
                     sub_orders.append(order)
                     continue
                 while read_idx < self._capacity:
-                    condition = compare(self._values[read_idx], order)
+                    condition = self._compare(self._values[read_idx], order)
                     if condition < 0:
                         # insert order at read_idx
                         new_values[write_idx] = self._values[read_idx]
@@ -257,7 +278,7 @@ class SortedAskArray(SortedBaseArray):
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
-                    condition = compare(self._values[read_idx], order)
+                    condition = self._compare(self._values[read_idx], order)
                     if condition < 0:
                         # append order
                         self._values[write_idx] = (order.order_id, order.price, order.timestamp)
@@ -288,7 +309,7 @@ class SortedAskArray(SortedBaseArray):
         write_idx = 0
         for order in sorted_orders:
             while read_idx < self._capacity:
-                condition = compare(self._values[read_idx], order)
+                condition = self._compare(self._values[read_idx], order)
                 if condition < 0:
                     # skip read_idx, move write_idx to next position
                     if read_idx > write_idx:
@@ -321,6 +342,27 @@ class SortedBidArray(SortedBaseArray):
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
 
+    def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
+        """ compare two orders, first by price, second by timestamp
+        """
+        if a[0] == b.order_id:
+            return 0
+
+        if a[1] == b.price:
+            if a[2] < b.timestamp:
+                return 1
+            elif a[2] > b.timestamp:
+                return -1
+            else:
+                if a[0] < b.order_id:
+                    return -1
+                else: # a[0] > b.order_id:
+                    return 1
+        elif a[1] > b.price:
+            return 1
+        else: # a.price < b.price
+            return -1
+
     def _bisearch(self, order: Order) -> Tuple[int, int]:
         """ binary search the position to insert order, in descending order
             Assert _values is not full and is not empty, and _valuse[-1] < order
@@ -328,7 +370,7 @@ class SortedBidArray(SortedBaseArray):
         start, end = 0, self._capacity - 1
         while start <= end:
             mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
+            condition = self._compare(self._values[mid], order)
             if condition > 0:
                 # mid > order
                 start = mid + 1
@@ -352,7 +394,7 @@ class SortedBidArray(SortedBaseArray):
             self._capacity += 1
             return True
 
-        if compare(self._values[self._capacity-1], order) > 0:
+        if self._compare(self._values[self._capacity-1], order) > 0:
             # append new order
             self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
             self._capacity += 1
@@ -385,7 +427,7 @@ class SortedBidArray(SortedBaseArray):
         start, end = 0, self._capacity - 1
         while start <= end:
             mid = int((start + end) * 0.5)
-            condition = compare(self._values[mid], order)
+            condition = self._compare(self._values[mid], order)
             if condition > 0:
                 # mid < order
                 start = mid + 1
@@ -430,7 +472,7 @@ class SortedBidArray(SortedBaseArray):
                     sub_orders.append(order)
                     continue
                 while read_idx < self._capacity:
-                    condition = compare(self._values[read_idx], order)
+                    condition = self._compare(self._values[read_idx], order)
                     if condition > 0:
                         # insert order at read_idx
                         new_values[write_idx] = self._values[read_idx]
@@ -458,7 +500,7 @@ class SortedBidArray(SortedBaseArray):
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
-                    condition = compare(self._values[read_idx], order)
+                    condition = self._compare(self._values[read_idx], order)
                     if condition < 0:
                         # append read idx
                         self._values[write_idx] = self._values[read_idx]
@@ -489,7 +531,7 @@ class SortedBidArray(SortedBaseArray):
         write_idx = 0
         for order in sorted_orders:
             while read_idx < self._capacity:
-                condition = compare(self._values[read_idx], order)
+                condition = self._compare(self._values[read_idx], order)
                 if condition > 0:
                     # skip read_idx, move write_idx to next position
                     if read_idx > write_idx:
@@ -544,6 +586,7 @@ class SkipList:
             self.free_nodes.extend([SkipNode(None, self.max_level, i+self.capacity) for i in range(self.max_node_size)])
             self.free_nodes_ptr.extend(range(self.max_node_size+1, self.max_node_size*2+1))
             self.max_node_size *= 2
+            self.free_ptr_head = self.max_node_size+1
 
         # allocate a new node from free node list
         node = self.free_nodes[self.free_ptr_head]
@@ -664,7 +707,7 @@ class AskSkipList(SkipList):
         """查找指定键，返回值，不存在则返回 None"""
         current = self.head
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
         # 到达底层，current 指向最后一个键 < key 的节点
         candidate = current.forward[0]
@@ -680,7 +723,7 @@ class AskSkipList(SkipList):
 
         # 从最高层开始查找，记录每一层的前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
@@ -714,7 +757,7 @@ class AskSkipList(SkipList):
 
         # 查找并记录各层前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
@@ -735,7 +778,7 @@ class BidSkipList(SkipList):
         """查找指定键，返回值，不存在则返回 None"""
         current = self.head
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) > 0:
+            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
                 current = current.forward[lvl]
         # 到达底层，current 指向最后一个键 < key 的节点
         candidate = current.forward[0]
@@ -751,7 +794,7 @@ class BidSkipList(SkipList):
 
         # 从最高层开始查找，记录每一层的前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) > 0:
+            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
@@ -785,7 +828,7 @@ class BidSkipList(SkipList):
 
         # 查找并记录各层前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_order(current.forward[lvl].order, order) > 0:
+            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
