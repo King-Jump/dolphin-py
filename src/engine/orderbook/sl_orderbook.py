@@ -187,6 +187,9 @@ class SortedAskArray(SortedBaseArray):
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         """
+        if a[0] == b.order_id:
+            return 0
+
         if a[1] == b.price:
             if a[2] < b.timestamp:
                 return -1
@@ -349,6 +352,10 @@ class SortedBidArray(SortedBaseArray):
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         """
+        if a[0] == b.order_id:
+            # for delete
+            return 0
+
         if a[1] == b.price:
             if a[2] < b.timestamp:
                 return -1
@@ -574,7 +581,7 @@ class SkipList:
         """查找指定键，返回值，不存在则返回 None"""
         current = self.head
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and self._compare(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
         # 到达底层，current 指向最后一个键 < key 的节点
         candidate = current.forward[0]
@@ -590,7 +597,7 @@ class SkipList:
 
         # 从最高层开始查找，记录每一层的前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and self._compare(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
@@ -624,7 +631,7 @@ class SkipList:
 
         # 查找并记录各层前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_ask_order(current.forward[lvl].order, order) < 0:
+            while current.forward[lvl] and self._compare(current.forward[lvl].order, order) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
@@ -705,11 +712,13 @@ class SkipList:
 class AskSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
         super().__init__(max_level, pN, max_nodes)
+        self._compare = compare_ask_order
 
 
 class BidSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
         super().__init__(max_level, pN, max_nodes)
+        self._compare = compare_bid_order
 
 
 class OrderBook(OrderBookInterface):
