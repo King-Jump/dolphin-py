@@ -17,10 +17,10 @@ MAX_NEAR_SIZE = 1_000
 
 def compare_ask_order(a: Order, b: Order) -> int:
     """ compare two orders, first by price, second by timestamp
+    1. price is ascending
+    2. timestamp is ascending
+    3. order_id is ascending
     """
-    if a.order_id == b.order_id:
-        return 0
-
     if a.price == b.price:
         if a.timestamp < b.timestamp:
             return -1
@@ -29,8 +29,10 @@ def compare_ask_order(a: Order, b: Order) -> int:
         else:
             if a.order_id < b.order_id:
                 return -1
-            #elif a.order_id > b.order_id:
-            return 1
+            elif a.order_id > b.order_id:
+                return 1
+            else:
+                return 0
     elif a.price > b.price:
         return 1
     else: # a.price < b.price
@@ -38,24 +40,26 @@ def compare_ask_order(a: Order, b: Order) -> int:
 
 def compare_bid_order(a: Order, b: Order) -> int:
     """ compare two orders, first by price, second by timestamp
+    1. price is descending
+    2. timestamp is ascending
+    3. order_id is ascending
     """
-    if a.order_id == b.order_id:
-        return 0
-
     if a.price == b.price:
         if a.timestamp < b.timestamp:
-            return 1
-        elif a.timestamp > b.timestamp:
             return -1
+        elif a.timestamp > b.timestamp:
+            return 1
         else:
             if a.order_id < b.order_id:
                 return -1
-            #elif a.order_id > b.order_id:
-            return 1
+            elif a.order_id > b.order_id:
+                return 1
+            else:
+                return 0
     elif a.price > b.price:
-        return 1
-    else: # a.price < b.price
         return -1
+    else: # a.price < b.price
+        return 1
 
 class SortedBaseArray:
     def __init__(self, max_size=1_000, logger=None):
@@ -123,9 +127,6 @@ class SortedAskArray(SortedBaseArray):
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         """
-        if a[0] == b.order_id:
-            return 0
-
         if a[1] == b.price:
             if a[2] < b.timestamp:
                 return -1
@@ -134,8 +135,10 @@ class SortedAskArray(SortedBaseArray):
             else:
                 if a[0] < b.order_id:
                     return -1
-                else: # a[0] > b.order_id:
+                elif a[0] > b.order_id:
                     return 1
+                else:
+                    return 0
         elif a[1] > b.price:
             return 1
         else: # a.price < b.price
@@ -225,7 +228,7 @@ class SortedAskArray(SortedBaseArray):
             return success or fail, orders to move out to far-end array, sub-orders not inserted
         """
         if self._capacity == 0:
-            sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+            sorted_orders = sorted(orders, key=compare_ask_order)
             if len(sorted_orders) > self.max_size:
                 self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
                 self._capacity = self.max_size
@@ -239,7 +242,7 @@ class SortedAskArray(SortedBaseArray):
         if len(orders) + self._capacity > self.max_size:
             # create a new near-end array, since near-end array is not enough
             new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+            sorted_orders = sorted(orders, key=compare_ask_order)
             write_idx = 0
             read_idx = 0
             far_end_orders = [] # order_id list
@@ -272,19 +275,19 @@ class SortedAskArray(SortedBaseArray):
             self._capacity = write_idx
             return True, far_end_orders, sub_orders
         else:
-            # insert all orders to new-end array, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
+            # insert all orders to a new-end array from end to start, first sort orders in descending order
+            reverse_sorted_orders = sorted(orders, key=compare_ask_order, reverse=True)
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
                     condition = self._compare(self._values[read_idx], order)
-                    if condition < 0:
+                    if condition > 0:
                         # append order
                         self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx -= 1
                         break
-                    # else: condition > 0
+                    # else: condition < 0
                     # append read idx
                     self._values[write_idx] = self._values[read_idx]
                     write_idx -= 1
@@ -304,7 +307,7 @@ class SortedAskArray(SortedBaseArray):
         if self._capacity == 0:
             return deleted_orders
 
-        sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+        sorted_orders = sorted(orders, key=compare_ask_order)
         read_idx = 0
         write_idx = 0
         for order in sorted_orders:
@@ -345,23 +348,22 @@ class SortedBidArray(SortedBaseArray):
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         """
-        if a[0] == b.order_id:
-            return 0
-
         if a[1] == b.price:
             if a[2] < b.timestamp:
-                return 1
-            elif a[2] > b.timestamp:
                 return -1
+            elif a[2] > b.timestamp:
+                return 1
             else:
                 if a[0] < b.order_id:
                     return -1
-                else: # a[0] > b.order_id:
+                elif a[0] > b.order_id:
                     return 1
+                else:
+                    return 0
         elif a[1] > b.price:
-            return 1
-        else: # a.price < b.price
             return -1
+        else: # a.price < b.price
+            return 1
 
     def _bisearch(self, order: Order) -> Tuple[int, int]:
         """ binary search the position to insert order, in descending order
@@ -447,7 +449,7 @@ class SortedBidArray(SortedBaseArray):
             return success or fail, orders to move out to far-end array, sub-orders not inserted to new-end array
         """
         if self._capacity == 0:
-            sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
+            sorted_orders = sorted(orders, key=compare_bid_order)
             if len(sorted_orders) > self.max_size:
                 self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
                 self._capacity = self.max_size
@@ -461,7 +463,7 @@ class SortedBidArray(SortedBaseArray):
         if len(orders) + self._capacity > self.max_size:
             # create a new near-end array, since near-end array is not enough
             new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
+            sorted_orders = sorted(orders, key=compare_bid_order)
             write_idx = 0
             read_idx = 0
             far_end_orders = [] # order_id list
@@ -473,12 +475,12 @@ class SortedBidArray(SortedBaseArray):
                     continue
                 while read_idx < self._capacity:
                     condition = self._compare(self._values[read_idx], order)
-                    if condition > 0:
+                    if condition < 0:
                         # insert order at read_idx
                         new_values[write_idx] = self._values[read_idx]
                         read_idx += 1
                         write_idx += 1
-                    else: # condition < 0
+                    else: # condition > 0
                         # insert order
                         new_values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx += 1
@@ -494,19 +496,19 @@ class SortedBidArray(SortedBaseArray):
             self._capacity = write_idx
             return True, far_end_orders, sub_orders
         else:
-            # insert all orders to new-end array, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp))
+            # insert all orders to a new-end array from end to start, first sort orders in descending order
+            reverse_sorted_orders = sorted(orders, key=compare_bid_order, reverse=True)
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
                 while read_idx >= 0:
                     condition = self._compare(self._values[read_idx], order)
-                    if condition < 0:
+                    if condition > 0:
                         # append read idx
                         self._values[write_idx] = self._values[read_idx]
                         write_idx -= 1
                         read_idx -= 1
-                    else: # condition > 0
+                    else: # condition < 0
                         # append order
                         self._values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx -= 1
@@ -526,20 +528,20 @@ class SortedBidArray(SortedBaseArray):
         if self._capacity == 0:
             return deleted_orders
 
-        sorted_orders = sorted(orders, key=lambda x: (x.price, x.timestamp), reverse=True)
+        sorted_orders = sorted(orders, key=compare_bid_order)
         read_idx = 0
         write_idx = 0
         for order in sorted_orders:
             while read_idx < self._capacity:
                 condition = self._compare(self._values[read_idx], order)
-                if condition > 0:
+                if condition < 0:
                     # skip read_idx, move write_idx to next position
                     if read_idx > write_idx:
                         # move read_idx to write_idx
                         self._values[write_idx] = self._values[read_idx]
                     read_idx += 1
                     write_idx += 1
-                elif condition < 0:
+                elif condition > 0:
                     # skip order
                     break
                 else: # condition == 0
