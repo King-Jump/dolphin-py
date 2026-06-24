@@ -73,6 +73,26 @@ class SortedBaseArray:
         self.MIN_CAPACITY_RATIO = 0.75
         self.MOVE_IN_RATIO = 0.95
 
+    def _bisearch(self, order: Order) -> Tuple[int, int]:
+        """ binary search and return the offset and condition, in ascending order
+            Assert: _values is not empty and not full, order < _values[-1]
+        """
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = self._compare(self._values[mid], order)
+            if condition < 0:
+                # mid < order
+                start = mid + 1
+            elif condition > 0:
+                # mid > order
+                end = mid - 1
+            else: # condition == 0
+                self.logger.error("%s is already in the near-end array", order.order_id)
+                return -1, 0
+
+        return mid, condition
+
     def size(self) -> int:
         return self._capacity
 
@@ -146,6 +166,121 @@ class SortedBaseArray:
                 return True
         return False
 
+    def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
+        """ batch insert orders by merge sort
+            return success or fail, orders to move out to far-end array, sub-orders not inserted
+        """
+        if self._capacity == 0:
+            sorted_orders = sorted(orders, key=self._key_cmp)
+            if len(sorted_orders) > self.max_size:
+                self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
+                self._capacity = self.max_size
+                return True, [], sorted_orders[self.max_size:]
+            # else:
+            for idx, order in enumerate(sorted_orders):
+                self._values[idx] = (order.order_id, order.price, order.timestamp)
+            self._capacity = len(sorted_orders)
+            return True, [], []
+
+        if len(orders) + self._capacity > self.max_size:
+            # create a new near-end array, since near-end array is not enough
+            new_values = [0] * self.max_size
+            sorted_orders = sorted(orders, key=self._key_cmp)
+            write_idx = 0
+            read_idx = 0
+            far_end_orders = [] # order_id list
+            sub_orders = [] # orders not inserted to new-end array
+            for order in sorted_orders:
+                if write_idx >= self.max_size:
+                    # new_values is full
+                    sub_orders.append(order)
+                    continue
+                while read_idx < self._capacity:
+                    condition = self._compare(self._values[read_idx], order)
+                    if condition < 0:
+                        # insert order at read_idx
+                        new_values[write_idx] = self._values[read_idx]
+                        read_idx += 1
+                        write_idx += 1
+                    else: # condition > 0
+                        # insert order
+                        new_values[write_idx] = (order.order_id, order.price, order.timestamp)
+                        write_idx += 1
+                        break
+                if read_idx >= self._capacity:
+                    new_values[write_idx] = (order.order_id, order.price, order.timestamp)
+                    write_idx += 1
+
+            for idx in range(read_idx, self._capacity):
+                far_end_orders.append(self._values[idx][0])
+
+            self._values = new_values
+            self._capacity = write_idx
+            return True, far_end_orders, sub_orders
+        else:
+            # insert all orders to a new-end array from end to start, first sort orders in descending order
+            reverse_sorted_orders = sorted(orders, key=self._key_cmp, reverse=True)
+            write_idx = self._capacity - 1 + len(reverse_sorted_orders)
+            read_idx = self._capacity - 1
+            for order in reverse_sorted_orders:
+                while read_idx >= 0:
+                    condition = self._compare(self._values[read_idx], order)
+                    if condition > 0:
+                        # append read idx
+                        self._values[write_idx] = self._values[read_idx]
+                        write_idx -= 1
+                        read_idx -= 1
+                    else: # condition < 0
+                        # append order
+                        self._values[write_idx] = (order.order_id, order.price, order.timestamp)
+                        write_idx -= 1
+                        break
+
+                if read_idx < 0:
+                    self._values[write_idx] = (order.order_id, order.price, order.timestamp)
+                    write_idx -= 1
+            self._capacity += len(reverse_sorted_orders)
+            return True, [], []
+
+    def batch_delete(self, orders: List[Order]) -> List[str]:
+        """ batch delete orders from the array
+            return deleted order ids
+        """
+        deleted_orders = []
+        if self._capacity == 0:
+            return deleted_orders
+
+        sorted_orders = sorted(orders, key=self._key_cmp)
+        read_idx = 0
+        write_idx = 0
+        for order in sorted_orders:
+            while read_idx < self._capacity:
+                condition = self._compare(self._values[read_idx], order)
+                if condition < 0:
+                    # skip read_idx, move write_idx to next position
+                    if read_idx > write_idx:
+                        # move read_idx to write_idx
+                        self._values[write_idx] = self._values[read_idx]
+                    read_idx += 1
+                    write_idx += 1
+                elif condition > 0:
+                    # skip order
+                    break
+                else: # condition == 0
+                    # delete order
+                    deleted_orders.append(order.order_id)
+                    read_idx += 1
+                    break
+            if read_idx >= self._capacity:
+                break
+
+        for i in range(read_idx, self._capacity):
+            self._values[write_idx] = self._values[i]
+            write_idx += 1
+
+        self._capacity -= len(deleted_orders)
+        return deleted_orders
+
     def peek(self) -> Optional[str]:
         """ peek the first order in the array
         """
@@ -183,6 +318,7 @@ class SortedAskArray(SortedBaseArray):
     """
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
+        self._key_cmp = cmp_to_key(compare_ask_order)
 
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
@@ -207,147 +343,13 @@ class SortedAskArray(SortedBaseArray):
         else: # a.price < b.price
             return -1
 
-    def _bisearch(self, order: Order) -> Tuple[int, int]:
-        """ binary search and return the offset and condition, in ascending order
-            Assert: _values is not empty and not full, order < _values[-1]
-        """
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = self._compare(self._values[mid], order)
-            if condition < 0:
-                # mid < order
-                start = mid + 1
-            elif condition > 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                self.logger.error("%s is already in the near-end array", order.order_id)
-                return -1, 0
-
-        return mid, condition
-
-    def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
-        """ batch insert orders by merge sort
-            return success or fail, orders to move out to far-end array, sub-orders not inserted
-        """
-        if self._capacity == 0:
-            sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
-            if len(sorted_orders) > self.max_size:
-                self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
-                self._capacity = self.max_size
-                return True, [], sorted_orders[self.max_size:]
-            else:
-                for idx, order in enumerate(sorted_orders):
-                    self._values[idx] = (order.order_id, order.price, order.timestamp)
-                self._capacity = len(sorted_orders)
-                return True, [], []
-
-        if len(orders) + self._capacity > self.max_size:
-            # create a new near-end array, since near-end array is not enough
-            new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
-            write_idx = 0
-            read_idx = 0
-            far_end_orders = [] # order_id list
-            sub_orders = [] # orders not inserted to new-end array
-            for order in sorted_orders:
-                if write_idx >= self.max_size:
-                    # new_values is full
-                    sub_orders.append(order)
-                    continue
-                while read_idx < self._capacity:
-                    condition = self._compare(self._values[read_idx], order)
-                    if condition < 0:
-                        # insert order at read_idx
-                        new_values[write_idx] = self._values[read_idx]
-                        read_idx += 1
-                        write_idx += 1
-                    else: # condition > 0
-                        # insert order
-                        new_values[write_idx] = (order.order_id, order.price, order.timestamp)
-                        write_idx += 1
-                        break
-                if read_idx >= self._capacity:
-                    new_values[write_idx] = (order.order_id, order.price, order.timestamp)
-                    write_idx += 1
-
-            for idx in range(read_idx, self._capacity):
-                far_end_orders.append(self._values[idx][0])
-
-            self._values = new_values
-            self._capacity = write_idx
-            return True, far_end_orders, sub_orders
-        else:
-            # insert all orders to a new-end array from end to start, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order), reverse=True)
-            write_idx = self._capacity - 1 + len(reverse_sorted_orders)
-            read_idx = self._capacity - 1
-            for order in reverse_sorted_orders:
-                while read_idx >= 0:
-                    condition = self._compare(self._values[read_idx], order)
-                    if condition > 0:
-                        # append order
-                        self._values[write_idx] = (order.order_id, order.price, order.timestamp)
-                        write_idx -= 1
-                        break
-                    # else: condition < 0
-                    # append read idx
-                    self._values[write_idx] = self._values[read_idx]
-                    write_idx -= 1
-                    read_idx -= 1
-
-                if read_idx < 0:
-                    self._values[write_idx] = (order.order_id, order.price, order.timestamp)
-                    write_idx -= 1
-            self._capacity += len(reverse_sorted_orders)
-            return True, [], []
-
-    def batch_delete(self, orders: List[Order]) -> List[str]:
-        """ batch delete orders from the array
-            return deleted order ids
-        """
-        deleted_orders = []
-        if self._capacity == 0:
-            return deleted_orders
-
-        sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
-        read_idx = 0
-        write_idx = 0
-        for order in sorted_orders:
-            while read_idx < self._capacity:
-                condition = self._compare(self._values[read_idx], order)
-                if condition < 0:
-                    # skip read_idx, move write_idx to next position
-                    if read_idx > write_idx:
-                        # move read_idx to write_idx
-                        self._values[write_idx] = self._values[read_idx]
-                    read_idx += 1
-                    write_idx += 1
-                elif condition > 0:
-                    # skip order
-                    break
-                else: # condition == 0
-                    # delete order
-                    deleted_orders.append(order.order_id)
-                    read_idx += 1
-                    break
-            if read_idx >= self._capacity:
-                break
-
-        for i in range(read_idx, self._capacity):
-            self._values[write_idx] = self._values[i]
-            write_idx += 1
-
-        self._capacity -= len(deleted_orders)
-        return deleted_orders
-
 
 class SortedBidArray(SortedBaseArray):
     """ Sorted array for bid orders, in descending order
     """
     def __init__(self, max_size=1_000, logger=None):
         super().__init__(max_size, logger)
+        self._key_cmp = cmp_to_key(compare_bid_order)
 
     def _compare(self, a: Tuple[str, float, int], b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
@@ -372,141 +374,6 @@ class SortedBidArray(SortedBaseArray):
             return -1
         else: # a.price < b.price
             return 1
-
-    def _bisearch(self, order: Order) -> Tuple[int, int]:
-        """ binary search the position to insert order, in descending order
-            Assert _values is not full and is not empty, and _valuse[-1] < order
-        """
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = self._compare(self._values[mid], order)
-            if condition < 0:
-                # mid > order
-                start = mid + 1
-            elif condition > 0:
-                # mid < order
-                end = mid - 1
-            else: # condition == 0
-                self.logger.error("%s is already in the near-end array", order.order_id)
-                return -1, 0
-
-        return mid, condition
-
-    def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
-        """ batch insert orders by merge sort
-            return success or fail, orders to move out to far-end array, sub-orders not inserted to new-end array
-        """
-        if self._capacity == 0:
-            sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
-            if len(sorted_orders) > self.max_size:
-                self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
-                self._capacity = self.max_size
-                return True, [], sorted_orders[self.max_size:]
-            # else
-            for idx, order in enumerate(sorted_orders):
-                self._values[idx] = (order.order_id, order.price, order.timestamp)
-            self._capacity = len(sorted_orders)
-            return True, [], []
-
-        if len(orders) + self._capacity > self.max_size:
-            # create a new near-end array, since near-end array is not enough
-            new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
-            write_idx = 0
-            read_idx = 0
-            far_end_orders = [] # order_id list
-            sub_orders = [] # orders not inserted to new-end array
-            for order in sorted_orders:
-                if write_idx >= self.max_size:
-                    # new_values is full
-                    sub_orders.append(order)
-                    continue
-                while read_idx < self._capacity:
-                    condition = self._compare(self._values[read_idx], order)
-                    if condition < 0:
-                        # insert order at read_idx
-                        new_values[write_idx] = self._values[read_idx]
-                        read_idx += 1
-                        write_idx += 1
-                    else: # condition > 0
-                        # insert order
-                        new_values[write_idx] = (order.order_id, order.price, order.timestamp)
-                        write_idx += 1
-                        break
-                if read_idx >= self._capacity:
-                    new_values[write_idx] = (order.order_id, order.price, order.timestamp)
-                    write_idx += 1
-
-            for idx in range(read_idx, self._capacity):
-                far_end_orders.append(self._values[idx][0])
-
-            self._values = new_values
-            self._capacity = write_idx
-            return True, far_end_orders, sub_orders
-        else:
-            # insert all orders to a new-end array from end to start, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order), reverse=True)
-            write_idx = self._capacity - 1 + len(reverse_sorted_orders)
-            read_idx = self._capacity - 1
-            for order in reverse_sorted_orders:
-                while read_idx >= 0:
-                    condition = self._compare(self._values[read_idx], order)
-                    if condition > 0:
-                        # append read idx
-                        self._values[write_idx] = self._values[read_idx]
-                        write_idx -= 1
-                        read_idx -= 1
-                    else: # condition < 0
-                        # append order
-                        self._values[write_idx] = (order.order_id, order.price, order.timestamp)
-                        write_idx -= 1
-                        break
-
-                if read_idx < 0:
-                    self._values[write_idx] = (order.order_id, order.price, order.timestamp)
-                    write_idx -= 1
-            self._capacity += len(reverse_sorted_orders)
-            return True, [], []
-
-    def batch_delete(self, orders: List[Order]) -> List[str]:
-        """ batch delete orders from the array
-            return deleted order ids
-        """
-        deleted_orders = []
-        if self._capacity == 0:
-            return deleted_orders
-
-        sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
-        read_idx = 0
-        write_idx = 0
-        for order in sorted_orders:
-            while read_idx < self._capacity:
-                condition = self._compare(self._values[read_idx], order)
-                if condition < 0:
-                    # skip read_idx, move write_idx to next position
-                    if read_idx > write_idx:
-                        # move read_idx to write_idx
-                        self._values[write_idx] = self._values[read_idx]
-                    read_idx += 1
-                    write_idx += 1
-                elif condition > 0:
-                    # skip order
-                    break
-                else: # condition == 0
-                    # delete order
-                    deleted_orders.append(order.order_id)
-                    read_idx += 1
-                    break
-            if read_idx >= self._capacity:
-                break
-
-        for i in range(read_idx, self._capacity):
-            self._values[write_idx] = self._values[i]
-            write_idx += 1
-
-        self._capacity -= len(deleted_orders)
-        return deleted_orders
 
 
 class SkipNode:
