@@ -8,6 +8,7 @@ import random
 import threading
 import logging
 from typing import Tuple, List, Optional, Dict
+from functools import cmp_to_key
 
 from src.engine.types.types import Order, OrderSide, OrderStatus, OrderBook as OrderBookModel
 from src.engine.orderbook.ob_interface import OrderBookInterface
@@ -228,7 +229,7 @@ class SortedAskArray(SortedBaseArray):
             return success or fail, orders to move out to far-end array, sub-orders not inserted
         """
         if self._capacity == 0:
-            sorted_orders = sorted(orders, key=compare_ask_order)
+            sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
             if len(sorted_orders) > self.max_size:
                 self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
                 self._capacity = self.max_size
@@ -242,7 +243,7 @@ class SortedAskArray(SortedBaseArray):
         if len(orders) + self._capacity > self.max_size:
             # create a new near-end array, since near-end array is not enough
             new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=compare_ask_order)
+            sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
             write_idx = 0
             read_idx = 0
             far_end_orders = [] # order_id list
@@ -276,7 +277,7 @@ class SortedAskArray(SortedBaseArray):
             return True, far_end_orders, sub_orders
         else:
             # insert all orders to a new-end array from end to start, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=compare_ask_order, reverse=True)
+            reverse_sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order), reverse=True)
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
@@ -307,7 +308,7 @@ class SortedAskArray(SortedBaseArray):
         if self._capacity == 0:
             return deleted_orders
 
-        sorted_orders = sorted(orders, key=compare_ask_order)
+        sorted_orders = sorted(orders, key=cmp_to_key(compare_ask_order))
         read_idx = 0
         write_idx = 0
         for order in sorted_orders:
@@ -449,7 +450,7 @@ class SortedBidArray(SortedBaseArray):
             return success or fail, orders to move out to far-end array, sub-orders not inserted to new-end array
         """
         if self._capacity == 0:
-            sorted_orders = sorted(orders, key=compare_bid_order)
+            sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
             if len(sorted_orders) > self.max_size:
                 self._values = [(order.order_id, order.price, order.timestamp) for order in sorted_orders[:self.max_size]]
                 self._capacity = self.max_size
@@ -463,7 +464,7 @@ class SortedBidArray(SortedBaseArray):
         if len(orders) + self._capacity > self.max_size:
             # create a new near-end array, since near-end array is not enough
             new_values = [0] * self.max_size
-            sorted_orders = sorted(orders, key=compare_bid_order)
+            sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
             write_idx = 0
             read_idx = 0
             far_end_orders = [] # order_id list
@@ -497,7 +498,7 @@ class SortedBidArray(SortedBaseArray):
             return True, far_end_orders, sub_orders
         else:
             # insert all orders to a new-end array from end to start, first sort orders in descending order
-            reverse_sorted_orders = sorted(orders, key=compare_bid_order, reverse=True)
+            reverse_sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order), reverse=True)
             write_idx = self._capacity - 1 + len(reverse_sorted_orders)
             read_idx = self._capacity - 1
             for order in reverse_sorted_orders:
@@ -528,7 +529,7 @@ class SortedBidArray(SortedBaseArray):
         if self._capacity == 0:
             return deleted_orders
 
-        sorted_orders = sorted(orders, key=compare_bid_order)
+        sorted_orders = sorted(orders, key=cmp_to_key(compare_bid_order))
         read_idx = 0
         write_idx = 0
         for order in sorted_orders:
