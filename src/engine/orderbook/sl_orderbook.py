@@ -87,6 +87,65 @@ class SortedBaseArray:
     def is_empty(self) -> bool:
         return self._capacity == 0
 
+    def insert(self, order: Order) -> bool:
+        """ binary search and insert order, assert the array is not full
+        """
+        if self.is_full():
+            return False
+
+        if self._capacity == 0: # empty array
+            self._values[0] = (order.order_id,order.price, order.timestamp)
+            self._capacity += 1
+            return True
+
+        if self._compare(self._values[self._capacity-1], order) < 0:
+            # append new order
+            self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
+            self._capacity += 1
+            return True
+
+        offset, condition = self._bisearch(order)
+        if offset == -1:
+            return False
+
+        if condition < 0:
+            # insert after offset, move array
+            for i in range(self._capacity, offset+1, -1):
+                self._values[i] = self._values[i-1]
+            self._values[offset+1] = (order.order_id, order.price, order.timestamp)
+        else: # condition > 0
+            # insert before offset, move array
+            for i in range(self._capacity, offset, -1):
+                self._values[i] = self._values[i-1]
+            self._values[offset] = (order.order_id, order.price, order.timestamp)
+
+        self._capacity += 1
+        return True
+
+    def delete(self, order: Order) -> bool:
+        """ delete order from the array
+        """
+        if self._capacity == 0: # empty array
+            return False
+
+        start, end = 0, self._capacity - 1
+        while start <= end:
+            mid = int((start + end) * 0.5)
+            condition = self._compare(self._values[mid], order)
+            if condition < 0:
+                # mid < order
+                start = mid + 1
+            elif condition > 0:
+                # mid > order
+                end = mid - 1
+            else: # condition == 0
+                # found and delte
+                for idx in range(mid, self._capacity - 1):
+                    self._values[idx] = self._values[idx+1]
+                self._capacity -= 1
+                return True
+        return False
+
     def peek(self) -> Optional[str]:
         """ peek the first order in the array
         """
@@ -164,65 +223,6 @@ class SortedAskArray(SortedBaseArray):
                 return -1, 0
 
         return mid, condition
-
-    def insert(self, order: Order) -> bool:
-        """ binary search and insert order, assert the array is not full
-        """
-        if self.is_full():
-            return False
-
-        if self._capacity == 0: # empty array
-            self._values[0] = (order.order_id,order.price, order.timestamp)
-            self._capacity += 1
-            return True
-
-        if self._compare(self._values[self._capacity-1], order) < 0:
-            # append new order
-            self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
-            self._capacity += 1
-            return True
-
-        offset, condition = self._bisearch(order)
-        if offset == -1:
-            return False
-
-        if condition < 0:
-            # insert after offset, move array
-            for i in range(self._capacity, offset+1, -1):
-                self._values[i] = self._values[i-1]
-            self._values[offset+1] = (order.order_id, order.price, order.timestamp)
-        else: # condition > 0
-            # insert before offset, move array
-            for i in range(self._capacity, offset, -1):
-                self._values[i] = self._values[i-1]
-            self._values[offset] = (order.order_id, order.price, order.timestamp)
-
-        self._capacity += 1
-        return True
-
-    def delete(self, order: Order) -> bool:
-        """ delete order from the array
-        """
-        if self._capacity == 0: # empty array
-            return False
-
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = self._compare(self._values[mid], order)
-            if condition < 0:
-                # mid < order
-                start = mid + 1
-            elif condition > 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                # found and delte
-                for idx in range(mid, self._capacity - 1):
-                    self._values[idx] = self._values[idx+1]
-                self._capacity -= 1
-                return True
-        return False
 
     def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
         """ batch insert orders by merge sort
@@ -374,10 +374,10 @@ class SortedBidArray(SortedBaseArray):
         while start <= end:
             mid = int((start + end) * 0.5)
             condition = self._compare(self._values[mid], order)
-            if condition > 0:
+            if condition < 0:
                 # mid > order
                 start = mid + 1
-            elif condition < 0:
+            elif condition > 0:
                 # mid < order
                 end = mid - 1
             else: # condition == 0
@@ -385,65 +385,6 @@ class SortedBidArray(SortedBaseArray):
                 return -1, 0
 
         return mid, condition
-
-    def insert(self, order: Order) -> bool:
-        """ binary search and insert order, assert the array is not full
-        """
-        if self.is_full():
-            return False
-
-        if self._capacity == 0: # empty array
-            self._values[0] = (order.order_id,order.price, order.timestamp)
-            self._capacity += 1
-            return True
-
-        if self._compare(self._values[self._capacity-1], order) > 0:
-            # append new order
-            self._values[self._capacity] = (order.order_id,order.price, order.timestamp)
-            self._capacity += 1
-            return True
-
-        offset, condition = self._bisearch(order)
-        if offset == -1:
-            return False
-
-        if condition < 0:
-            # insert at offset, move array
-            for i in range(self._capacity, offset, -1):
-                self._values[i] = self._values[i-1]
-            self._values[offset] = (order.order_id, order.price, order.timestamp)
-        else: # condition > 0
-            # insert after offset, move array
-            for i in range(self._capacity, offset+1, -1):
-                self._values[i] = self._values[i-1]
-            self._values[offset+1] = (order.order_id, order.price, order.timestamp)
-
-        self._capacity += 1
-        return True
-
-    def delete(self, order: Order) -> bool:
-        """ delete order from the array
-        """
-        if self._capacity == 0: # empty array
-            return False
-
-        start, end = 0, self._capacity - 1
-        while start <= end:
-            mid = int((start + end) * 0.5)
-            condition = self._compare(self._values[mid], order)
-            if condition > 0:
-                # mid < order
-                start = mid + 1
-            elif condition < 0:
-                # mid > order
-                end = mid - 1
-            else: # condition == 0
-                # found and delte
-                for idx in range(mid, self._capacity - 1):
-                    self._values[idx] = self._values[idx+1]
-                self._capacity -= 1
-                return True
-        return False
 
     def batch_insert(self, orders: List[Order]) -> Tuple[bool, List[str], List[Order]]:
         """ batch insert orders by merge sort
@@ -629,83 +570,6 @@ class SkipList:
 
         self._free_node(target)
 
-    def insert(self, order: Order) -> bool:
-        """ insert the order into skip list
-        """
-        return False
-
-    def delete(self, order: Order) -> bool:
-        """ delete the order from skip list
-        """
-        return False
-
-    def batch_insert(self, orders):
-        for order in orders:
-            self.insert(order)
-
-    def batch_delete(self, orders):
-        ids = []
-        for order in orders:
-            if self.delete(order):
-                ids.append(order.order_id)
-        return ids
-
-    def peek(self) -> Optional[Order]:
-        """ peek the first order in the array
-        """
-        if self.capacity == 0:
-            return None
-        return self.head.forward[0].order
-
-    def pop(self) -> Optional[Order]:
-        """ pop the first order in the array
-        """
-        if self.capacity == 0:
-            return None
-
-        node = self.head.forward[0]
-        order = node.order
-        for lvl in range(self.level):
-            if self.head.forward[lvl] and self.head.forward[lvl].order.order_id == order.order_id:
-                self.head.forward[lvl] = self.head.forward[lvl].forward[lvl]
-
-        while self.level > 1 and self.head.forward[self.level - 1] is None:
-            self.level -= 1
-
-        self._free_node(node)
-        return order
-
-    def peek_depth(self, depth: int) -> List[Tuple[float, float]]:
-        """ peek the first depth orders in the array
-        """
-        if self.capacity == 0:
-            return []
-
-        level = 0
-        levels = []
-        current = self.head.forward[0]
-        curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
-        while current.forward[0]:
-            current = current.forward[0]
-            price, qty = current.order.price, current.order.quantity - current.order.filled_quantity
-            if price != curr_price:
-                levels.append((curr_price, curr_qty))
-                level += 1
-                if level > depth:
-                    break
-
-                curr_price = price
-                curr_qty = qty
-            else:
-                curr_qty += qty
-        if level <= depth:
-            levels.append((curr_price, curr_qty))
-        return levels
-
-class AskSkipList(SkipList):
-    def __init__(self, max_level=16, pN=4, max_nodes=100_000):
-        super().__init__(max_level, pN, max_nodes)
-
     def search(self, order: Order) -> Optional[Order]:
         """查找指定键，返回值，不存在则返回 None"""
         current = self.head
@@ -772,76 +636,80 @@ class AskSkipList(SkipList):
 
         return True
 
+    def batch_insert(self, orders: List[Order]) -> List[Order]:
+        results = []
+        for order in orders:
+            if self.insert(order):
+                results.append(order)
+        return results
+
+    def batch_delete(self, orders: List[Order]) -> List[str]:
+        ids = []
+        for order in orders:
+            if self.delete(order):
+                ids.append(order.order_id)
+        return ids
+
+    def peek(self) -> Optional[Order]:
+        """ peek the first order in the array
+        """
+        if self.capacity == 0:
+            return None
+        return self.head.forward[0].order
+
+    def pop(self) -> Optional[Order]:
+        """ pop the first order in the array
+        """
+        if self.capacity == 0:
+            return None
+
+        node = self.head.forward[0]
+        order = node.order
+        for lvl in range(self.level):
+            if self.head.forward[lvl] and self.head.forward[lvl].order.order_id == order.order_id:
+                self.head.forward[lvl] = self.head.forward[lvl].forward[lvl]
+
+        while self.level > 1 and self.head.forward[self.level - 1] is None:
+            self.level -= 1
+
+        self._free_node(node)
+        return order
+
+    def peek_depth(self, depth: int) -> List[Tuple[float, float]]:
+        """ peek the first depth orders in the array
+        """
+        if self.capacity == 0:
+            return []
+
+        level = 0
+        levels = []
+        current = self.head.forward[0]
+        curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
+        while current.forward[0]:
+            current = current.forward[0]
+            price, qty = current.order.price, current.order.quantity - current.order.filled_quantity
+            if price != curr_price:
+                levels.append((curr_price, curr_qty))
+                level += 1
+                if level > depth:
+                    break
+
+                curr_price = price
+                curr_qty = qty
+            else:
+                curr_qty += qty
+        if level <= depth:
+            levels.append((curr_price, curr_qty))
+        return levels
+
+class AskSkipList(SkipList):
+    def __init__(self, max_level=16, pN=4, max_nodes=100_000):
+        super().__init__(max_level, pN, max_nodes)
+
 
 class BidSkipList(SkipList):
     def __init__(self, max_level=16, pN=4, max_nodes=100_000):
         super().__init__(max_level, pN, max_nodes)
-
-    def search(self, order: Order) -> Optional[Order]:
-        """查找指定键，返回值，不存在则返回 None"""
-        current = self.head
-        for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
-                current = current.forward[lvl]
-        # 到达底层，current 指向最后一个键 < key 的节点
-        candidate = current.forward[0]
-        if candidate and candidate.order.order_id == order.order_id:
-            return candidate.order
-        return None
-
-    def insert(self, order: Order) -> bool:
-        """插入键值对，若键已存在则更新值"""
-        # update 数组用于记录每一层插入位置的前驱节点
-        update = [None] * self.max_level
-        current = self.head
-
-        # 从最高层开始查找，记录每一层的前驱
-        for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
-                current = current.forward[lvl]
-            update[lvl] = current
-
-        # 检查键是否已存在（底层下一个节点）
-        candidate = current.forward[0]
-        if candidate and candidate.order.order_id == order.order_id:
-            candidate.order = order
-            return False
-
-        # 生成新节点的层数
-        new_level = self._random_level()
-        # 如果新节点的层数超过当前跳表的最高层，需要将多出的层的前驱指向头节点
-        if new_level > self.level:
-            for lvl in range(self.level, new_level):
-                update[lvl] = self.head
-            self.level = new_level
-
-        new_node = self._new_node(order, new_level)
-
-        # 将新节点插入到各层链表中
-        for lvl in range(new_level):
-            new_node.forward[lvl] = update[lvl].forward[lvl]
-            update[lvl].forward[lvl] = new_node
-
-        return True
-
-    def delete(self, order: Order) -> bool:
-        """删除指定键，返回 True 表示成功，False 表示键不存在"""
-        update = [None] * self.max_level
-        current = self.head
-
-        # 查找并记录各层前驱
-        for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and compare_bid_order(current.forward[lvl].order, order) > 0:
-                current = current.forward[lvl]
-            update[lvl] = current
-
-        target = current.forward[0]
-        if not target or target.order.order_id != order.order_id:
-            return False
-
-        self._clear(target, update)
-
-        return True
 
 
 class OrderBook(OrderBookInterface):
@@ -902,7 +770,7 @@ class OrderBook(OrderBookInterface):
         result = False
         if order.side == OrderSide.BUY:
             with self.bid_lock:
-                if self.far_bids.size() == 0 or compare_bid_order(order, self.far_bids.peek()) > 0:
+                if self.far_bids.size() == 0 or compare_bid_order(order, self.far_bids.peek()) < 0:
                     # order > first bid in far-end orders
                     result = self.near_bids.delete(order)
                     # move some orders from far-end to near-end, since near-end array is nearly empty
@@ -954,7 +822,9 @@ class OrderBook(OrderBookInterface):
                     if move_out_ids:
                         remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
-                        self.far_bids.batch_insert(remain_orders)
+                        far_added = self.far_bids.batch_insert(remain_orders)
+                        for far_order in far_added:
+                            self.orders[far_order.order_id] = far_order
         else:
             with self.ask_lock:
                 result, move_out_ids, remain_orders = self.near_asks.batch_insert(orders)
@@ -968,7 +838,9 @@ class OrderBook(OrderBookInterface):
                     if move_out_ids:
                         remain_orders.extend([self.orders[oid] for oid in move_out_ids])
                     if remain_orders:
-                        self.far_asks.batch_insert(remain_orders)
+                        far_added = self.far_asks.batch_insert(remain_orders)
+                        for far_order in far_added:
+                            self.orders[far_order.order_id] = far_order
 
     def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[str]:
         """批量移除订单"""
