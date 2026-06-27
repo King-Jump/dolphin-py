@@ -523,6 +523,12 @@ class MatchingEngine:
 
         return total_trades, buy_orders + sell_orders
 
+    def on_cancel_orders(self, uid, symbol, order_ids):
+        # Simplified implementation, should find the corresponding order book based on order_id in practice
+        order_book = self.get_order_book(symbol)
+        return order_book.batch_remove_orders(uid, order_ids)
+
+
     async def run_forever(self, topics: List[MMQTopic]):
         """ Get messages from the MMQ and process them
         """

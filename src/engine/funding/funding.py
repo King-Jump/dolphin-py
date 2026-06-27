@@ -28,7 +28,7 @@ class Funding:
         elif trade.market == Market.FUTURE:
             return self.handle_future_trade(trade)
 
-    def remove_order(self, order: Order) -> Tuple[bool, str]:
+    def on_order(self, order: Order) -> Tuple[bool, str]:
         """ 现货订单删除
         2. 若订单存在，系统删除订单
         3. 若订单不存在，系统返回错误信息
@@ -93,15 +93,33 @@ class Funding:
         FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps([order.to_dict() for order in orders]))
         return True, orders
 
-    def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, str]:
+    def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, List[Order]]:
         """ batch cancel spot orders, only for internal market maker
-            * escape asset freezing process
-            * drop market orders
-            * drop orders whose time in force is FOK or IOC
         """
-        orders = [order for order in self.order_ids if order.order_id in order_ids]
-        return True, "Orders canceled successfully"
+        valid_orders = []
+        orders = []
+        for oid in order_ids:
+            order = Order(uid,
+                symbol=symbol,
+                side='',
+                order_type='',
+                time_in_force='',
+                quantity=0,
+                price=None,
+                status=OrderStatus.CANCELLING,
+                )
+            order.order_id = oid
+            orders.append(order)
+            
+            if not oid in self.order_ids:
+                order.status = OrderStatus.UNKNOWN
+                continue
+            valid_orders.append(order)
+
+        if valid_order_ids:
+            FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_CANCEL, json.dumps(valid_order_ids))
+        return True, orders
 
 
-SPOT_FUNDING = Funding([UniMarginAccount("60000001"), UniMarginAccount("60000002")])
-FUTURE_FUNDING = Funding([UniMarginAccount("60000003")])
+SPOT_FUNDING = Funding([UniMarginAccount("60000001", is_inner_maker=True), UniMarginAccount("60000002")])
+FUTURE_FUNDING = Funding([UniMarginAccount("60000003", is_inner_maker=True)])

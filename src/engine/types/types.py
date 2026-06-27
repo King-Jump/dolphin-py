@@ -22,6 +22,7 @@ class OrderSide:
 
 # Order statuses
 class OrderStatus:
+    UNKNOWN = "UNKNOWN"
     PENDING = "PENDING"
     NEW = "NEW"
     FILLED = "FILLED"
@@ -39,7 +40,7 @@ class OrderTimeInForce:
 
 # Order model
 class Order:
-    def __init__(self, uid,symbol, side, order_type, time_in_force, quantity, price=None, client_order_id=None, is_futures=False, is_selftrade=False):
+    def __init__(self, uid, symbol, side, order_type, time_in_force, quantity, price=None, client_order_id=None, is_futures=False, is_selftrade=False):
         self.order_id = str(uuid.uuid4())
         self.uid = uid
         self.client_order_id = client_order_id or str(uuid.uuid4())

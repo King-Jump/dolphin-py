@@ -110,28 +110,23 @@ class SpotHandler:
             if not self._validate_symbol(symbol):
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
-            results = global_spot_engine.cancel_orders(
+            # results = global_spot_engine.cancel_orders(
+            result, orders = SPOT_FUNDING.delete_spot_orders(
                 uid=uid,
                 symbol=symbol,
                 order_ids=order_ids
             )
-            return jsonify({
-                "code": 200,
-                "data": [{
-                    "uid": cancelled.uid,
-                    "symbol": cancelled.symbol,
-                    "orderId": cancelled.order_id,
-                    "clientOrderId": cancelled.client_order_id,
-                    "timeInForce": cancelled.time_in_force,
-                    "transactTime": cancelled.timestamp,
-                    "price": cancelled.price,
-                    "origQty": cancelled.quantity,
-                    "executedQty": cancelled.filled_quantity,
-                    "status": cancelled.status,
-                    "type": cancelled.type,
-                    "side": cancelled.side
-                } for cancelled in results]
-            })
+            if result:
+                return jsonify({
+                    "code": 200,
+                    "data": [{
+                        "uid": cancelled.uid,
+                        "symbol": cancelled.symbol,
+                        "orderId": cancelled.order_id,
+                        "status": cancelled.status,
+                    } for cancelled in orders]
+                })
+            return jsonify({"code": 400, "msg": str(orders)}), 400
         except Exception as e:
             return jsonify({"code": 500, "msg": str(e)}), 500
 
