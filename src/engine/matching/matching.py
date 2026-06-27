@@ -6,8 +6,12 @@ from src.engine.types.types import (
     OrderTimeInForce,
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
 )
+from src.common.mmq import FUNDING_MATCH_MQ, MMQTopic
+from typing import List
+import asyncio
 import threading
 import time
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +27,8 @@ class MatchingEngine:
         self.max_kline_size = 200
         self.klines = {}
 
+
+    ### RPC interface
     def get_order_book(self, symbol) -> OrderBook:
         with self.lock:
             if symbol not in self.order_books:
@@ -252,10 +258,11 @@ class MatchingEngine:
         return order_book.get_order_book(depth)
 
     def create_order(self, uid, symbol, side, order_type, time_in_force, quantity, price=None, client_order_id=None, is_futures=False):
+        """ RPC interface
+        """
         logger.debug(f"create_order called with: symbol={symbol}, side={side}, order_type={order_type}, quantity={quantity}, price={price}, client_order_id={client_order_id}, is_futures={is_futures}")
         try:
             logger.debug(f"About to create Order with order_type={order_type}")
-            # Let's try calling with positional arguments instead
             order = Order(uid, symbol, side, order_type, time_in_force, quantity, price, client_order_id, is_futures)
             logger.debug(f"Order created successfully: {order.order_id} - {order.client_order_id}")
         except Exception as e:
@@ -268,7 +275,8 @@ class MatchingEngine:
         return trades, order
 
     def create_orders(self, uid, params, is_futures=False):
-        """ batch create orders, discard market orders and IOC/FOK orders
+        """ RPC interface
+            batch create orders, discard market orders and IOC/FOK orders
         """
         logger.debug(f"Creating orders with params: {params}")
         buy_orders = [Order(uid,
@@ -467,6 +475,82 @@ class MatchingEngine:
                 return []
             return self.klines[symbol][interval][-limit:]
 
+
+
+    ### MMQ interface
+    def on_order(self, order):
+        logger.debug(f"on_order called with: {order.to_dict()}")
+        trades = self.process_order(order)
+        return trades, order
+
+    def on_orders(self, orders: List[Order]):
+        """ RPC interface
+            batch create orders, discard market orders and IOC/FOK orders
+        """
+        logger.debug(f"on_orders called with: {orders}")
+        buy_orders = [order for order in orders if order.side == OrderSide.BUY]
+        buy_orders.sort(key=lambda x: x.price, reverse=True)
+
+        sell_orders = [order for order in orders if order.side == OrderSide.SELL]
+        sell_orders.sort(key=lambda x: x.price)
+ 
+        order_book = self.get_order_book(buy_orders[0].symbol if buy_orders else sell_orders[0].symbol)
+
+        total_trades = []
+        for idx, order in enumerate(sell_orders):
+            # Batch orders, simplified matching process
+            best_bid = order_book.get_best_bid()
+            if best_bid and best_bid.price >= order.price:
+                if order.time_in_force == OrderTimeInForce.GTC and order.is_selftrade:
+                    trades = self.process_order(order)
+                    total_trades.extend(trades)
+                continue
+
+            order_book.batch_add_orders(OrderSide.SELL, sell_orders[idx:])
+            break
+
+        for idx, order in enumerate(buy_orders):
+            # Batch orders, simplified matching process
+            best_ask = order_book.get_best_ask()
+            if best_ask and best_ask.price <= order.price:
+                if order.time_in_force == OrderTimeInForce.GTC and order.is_selftrade:
+                    trades = self.process_order(order)
+                    total_trades.extend(trades)
+                continue
+
+            order_book.batch_add_orders(OrderSide.BUY, buy_orders[idx:])
+            break
+
+        return total_trades, buy_orders + sell_orders
+
+    async def run_forever(self, topics: List[MMQTopic]):
+        """ Get messages from the MMQ and process them
+        """
+        prev_topic_offsets = {
+            topic: 0 for topic in topics
+        }
+        while True:
+            has_message = False
+            for topic in topics:
+                prev_offset = prev_topic_offsets[topic]
+                queue_offset, message = FUNDING_MATCH_MQ.consume(topic, prev_offset)
+                self.logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
+                if message:
+                    prev_topic_offsets[topic] = queue_offset + 1
+                    data = json.loads(message)
+                    if type(data) is list:
+                        self.on_orders(data)
+                    else:
+                        self.on_order(data)
+                    has_message = True
+
+            if has_message:
+                await asyncio.sleep(0.05)
+            else:
+                await asyncio.sleep(0.1)
+
 # Global trading engine instance
 global_spot_engine = MatchingEngine()
+asyncio.run(global_spot_engine.run_forever(MMQTopic.SPOT_NEW))
 global_futures_engine = MatchingEngine()
+asyncio.run(global_futures_engine.run_forever(MMQTopic.FUNDING_NEW))

@@ -25,6 +25,7 @@ class OrderStatus:
     PENDING = "PENDING"
     NEW = "NEW"
     FILLED = "FILLED"
+    CANCELLING = "CANCELLING"
     CANCELLED = "CANCELLED"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
 
@@ -73,8 +74,26 @@ class Order:
             "status": self.status,
             "timestamp": self.timestamp,
             "update_timestamp": self.update_timestamp,
-            "isSelfTrade": self.is_selftrade
+            "isSelfTrade": self.is_selftrade,
+            "isFutures": self.is_futures,
         }
+
+    def from_dict(self, data: dict):
+        self.uid = data["uid"]
+        self.order_id = data["orderId"]
+        self.client_order_id = data["clientOrderId"]
+        self.symbol = data["symbol"]
+        self.side = data["side"]
+        self.type = data["type"]
+        self.price = data["price"]
+        self.quantity = data["origQty"]
+        self.time_in_force = data["timeInForce"]
+        self.filled_quantity = data["filled_quantity"]
+        self.status = data["status"]
+        self.timestamp = data["timestamp"]
+        self.update_timestamp = data["update_timestamp"]
+        self.is_selftrade = data["isSelfTrade"]
+        self.is_futures = data["isFutures"]
 
     def get_market(self) -> Market:
         """ just for prototype """

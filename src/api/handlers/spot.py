@@ -1,7 +1,8 @@
 import logging
 from flask import jsonify, current_app
 import time
-from src.engine.matching.matching import global_spot_engine
+#from src.engine.matching.matching import global_spot_engine
+from src.engine.funding.funding import SPOT_FUNDING
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,8 @@ class SpotHandler:
                 return jsonify({"code": 400, "msg": "uid is required"}), 400
 
             logger.debug(f"Calling create_order with order_type={data.get('type')}, client_order_id={data.get('client_order_id')}")
-            trades, order = global_spot_engine.create_order(
+            # trades, order = global_spot_engine.create_order(
+            result, order = SPOT_FUNDING.create_order(
                 uid=data['uid'],
                 symbol=symbol,
                 side=data.get('side'),
@@ -40,7 +42,7 @@ class SpotHandler:
                 price=float(data.get('price')) if data.get('price') else 0,
                 client_order_id=data.get('client_order_id')
             )
-            if order:
+            if result:
                 return jsonify({
                     "code": 200,
                     "data": {
@@ -48,6 +50,7 @@ class SpotHandler:
                         "symbol": order.symbol,
                         "orderId": order.order_id,
                         "clientOrderId": order.client_order_id,
+                        "type": order.type,
                         "timeInForce": order.time_in_force,
                         "transactTime": order.timestamp,
                         "price": order.price,
@@ -58,7 +61,7 @@ class SpotHandler:
                         "side": order.side
                     }
                 })
-            return jsonify({"code": 400, "msg": "Failed to create order"}), 400
+            return jsonify({"code": 400, "msg": str(order)}), 400
         except Exception as e:
             import traceback
             logger.debug(f"Error in new_order: {e}")
@@ -73,26 +76,27 @@ class SpotHandler:
             params = data.get('batchOrders', [])
             results = []
 
-            _, orders = global_spot_engine.create_orders(
+            #_, orders = global_spot_engine.create_orders(
+            result, orders = SPOT_FUNDING.put_spot_orders(
                 uid=data['uid'],
                 params=params
             )
-            results = [{
-                "symbol": order.symbol,
-                "orderId": order.order_id,
-                "clientOrderId": order.client_order_id,
-                "timeInForce": order.time_in_force,
-                "transactTime": order.timestamp,
-                "price": order.price,
-                "origQty": order.quantity,
-                "executedQty": order.filled_quantity,
-                "status": order.status,
-                "type": order.type,
-                "side": order.side
-            } for order in orders]
-            return jsonify({
-                "code": 200,
-                "data": results
+            if result:
+                return jsonify({
+                    "code": 200,
+                    "data": [{
+                    "symbol": order.symbol,
+                    "orderId": order.order_id,
+                    "clientOrderId": order.client_order_id,
+                    "timeInForce": order.time_in_force,
+                    "transactTime": order.timestamp,
+                    "price": order.price,
+                    "origQty": order.quantity,
+                    "executedQty": order.filled_quantity,
+                    "status": order.status,
+                    "type": order.type,
+                    "side": order.side
+                } for order in orders]
             })
         except Exception as e:
             traceback.print_exc()

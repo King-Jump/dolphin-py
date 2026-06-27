@@ -1,6 +1,6 @@
 import time
 
-class SpotAccount:
+class UniMarginAccount:
     def __init__(self, uid: str):
         self.uid = uid
         self.balances = {}
