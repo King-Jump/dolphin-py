@@ -9,8 +9,11 @@ class Market:
 
 # Order types
 class OrderType:
+    # for new order
     LIMIT = "LIMIT"
     MARKET = "MARKET"
+    # for delete order
+    DELETE = "DELETE"
 
 # Order sides
 class OrderSide:
@@ -73,6 +76,15 @@ class Order:
             "isSelfTrade": self.is_selftrade
         }
 
+    def get_market(self) -> Market:
+        """ just for prototype """
+        if self.symbol == '90000001':
+            return Market.SPOT
+        elif self.symbol == '90000002':
+            return Market.SPOT_LEVERAGE
+        else:
+            return Market.FUTURE
+        
 # Trade model
 class Trade:
     def __init__(self, trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id):
