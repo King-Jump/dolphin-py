@@ -13,6 +13,8 @@ class MMQTopic:
     FUNDING_NEW = "funding_new"
     FUNDING_CANCEL = "funding_cancel"
 
+    SPOT_MATCH_OUT = "spot_match_out"
+
 class MMQ:
     """ store messages in memory, clear half of messages when it's full
     """
@@ -51,3 +53,4 @@ class MMQ:
             return offset, self.messages[topic][relative_offset]
 
 FUNDING_MATCH_MQ = MMQ()
+MATCH_FUNDING_MQ = MMQ()

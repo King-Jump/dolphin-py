@@ -6,7 +6,7 @@ from src.engine.types.types import (
     OrderTimeInForce,
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
 )
-from src.common.mmq import FUNDING_MATCH_MQ, MMQTopic
+from src.common.mmq import FUNDING_MATCH_MQ, MATCH_FUNDING_MQ, MMQTopic
 from typing import List
 import asyncio
 import threading
@@ -240,6 +240,9 @@ class MatchingEngine:
         return trades
 
     def cancel_order(self, uid, symbol, order_id):
+        """ RPC interface
+            cancel single order
+        """
         order_book = self.get_order_book(symbol)
         order = order_book.remove_order(uid, order_id)
         if order and order.uid == uid:
@@ -250,6 +253,9 @@ class MatchingEngine:
         return order
 
     def get_order(self, uid, symbol, order_id):
+        """ RPC interface
+            get single order
+        """
         order_book = self.get_order_book(symbol)
         return order_book.get_order(uid, order_id)
 
@@ -478,13 +484,16 @@ class MatchingEngine:
 
 
     ### MMQ interface
-    def on_order(self, order):
+    def on_order(self, order: Order):
+        """ MQ interface
+            process single order
+        """
         logger.debug(f"on_order called with: {order.to_dict()}")
         trades = self.process_order(order)
-        return trades, order
+        MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'trades': [tr.to_dict() for tr in trades], 'order': order.to_dict()}))
 
     def on_orders(self, orders: List[Order]):
-        """ RPC interface
+        """ MQ interface
             batch create orders, discard market orders and IOC/FOK orders
         """
         logger.debug(f"on_orders called with: {orders}")
@@ -521,13 +530,18 @@ class MatchingEngine:
             order_book.batch_add_orders(OrderSide.BUY, buy_orders[idx:])
             break
 
-        return total_trades, buy_orders + sell_orders
+        MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'trades': [tr.to_dict() for tr in total_trades], 'orders': [order.to_dict() for order in buy_orders + sell_orders]}))
 
-    def on_cancel_orders(self, uid, symbol, order_ids):
-        # Simplified implementation, should find the corresponding order book based on order_id in practice
+    def on_cancel_orders(self, data: Dict[str, str|List[str]]):
+        """ MQ interface
+            batch cancel orders
+        """
+        uid = data['uid']
+        symbol = data['symbol']
+        order_ids = data['order_ids']
         order_book = self.get_order_book(symbol)
-        return order_book.batch_remove_orders(uid, order_ids)
-
+        removed_ids = order_book.batch_remove_orders(uid, order_ids)
+        MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'removed_orders': [order_book.get_order(uid, order_id) for order_id in removed_ids]}))
 
     async def run_forever(self, topics: List[MMQTopic]):
         """ Get messages from the MMQ and process them

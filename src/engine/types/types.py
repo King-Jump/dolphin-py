@@ -131,6 +131,17 @@ class Trade:
             "timestamp": self.timestamp
         }
 
+    def from_dict(self, data: dict):
+        self.trade_id = data["tradeId"]
+        self.taker_uid = data["takerUid"]
+        self.maker_uid = data["makerUid"]
+        self.symbol = data["symbol"]
+        self.price = data["price"]
+        self.quantity = data["quantity"]
+        self.buy_order_id = data["buyOrderId"]
+        self.sell_order_id = data["sellOrderId"]
+        self.timestamp = data["timestamp"]
+
 # Order price level
 class OrderLevel:
     def __init__(self, price, quantity):

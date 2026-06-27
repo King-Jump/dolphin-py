@@ -2,47 +2,28 @@ from rbloom import Bloom
 from typing import Tuple, List
 import time
 import json
+import asyncio
 
 from src.engine.types.types import Market, OrderType, OrderSide, Order, Trade, TimeInForce
 from src.engine.types.account_types import UniMarginAccount
 from src.common.config.metadata import get_base_quote
-from src.common.mmq import FUNDING_MATCH_MQ, MMQTopic
-
+from src.common.mmq import FUNDING_MATCH_MQ, MATCH_FUNDING_MQ, MMQTopic
+#from src.engine.matching.matching import global_spot_engine
 
 
 class Funding:
     def __init__(self, accounts: List[UniMarginAccount]):
         self.accounts = accounts
-        self.order_ids = Bloom()
+        self.exist_order_ids = Bloom()
+        #self.cancelled_order_ids = Bloom()
 
-
-    def on_trade(self, trade: Trade) -> Tuple[bool, str]:
-        """ 订单成交
-        1. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
-        2. 冻结资产在订单取消或过期后解冻
-        """
-        if trade.market == Market.SPOT:
-            return self.handle_spot_trade(trade)
-        elif trade.market == Market.SPOT_LEVERAGE:
-            return self.handle_spot_leverage_trade(trade)
-        elif trade.market == Market.FUTURE:
-            return self.handle_future_trade(trade)
-
-    def on_order(self, order: Order) -> Tuple[bool, str]:
-        """ 现货订单删除
-        2. 若订单存在，系统删除订单
-        3. 若订单不存在，系统返回错误信息
-        """
-        if order.order_id not in self.order_ids:
-            return False, "Order ID not found"
-        self.order_ids.remove(order.order_id)
-        return True, "Order deleted successfully"
-
+    ### RPC interface
     def put_spot_order(
         self, uid, symbol, side, order_type, time_in_force, quantity,
         price=None, client_order_id=None, is_futures=False
         ) -> Tuple[bool, str|Order]:
-        """ 现货订单验证
+        """ RPC interface
+        现货订单验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
         2. 若余额充足，立即冻结订单全额对应的资产（买入冻结报价货币USDT，卖出冻结基础货币BTC）
         3. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
@@ -96,9 +77,9 @@ class Funding:
     def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, List[Order]]:
         """ batch cancel spot orders, only for internal market maker
         """
-        valid_orders = []
+        valid_order_ids = []
         orders = []
-        for oid in order_ids:
+        for oid in self.exist_order_ids:
             order = Order(uid,
                 symbol=symbol,
                 side='',
@@ -111,15 +92,73 @@ class Funding:
             order.order_id = oid
             orders.append(order)
             
-            if not oid in self.order_ids:
+            if not oid in self.exist_order_ids:
                 order.status = OrderStatus.UNKNOWN
                 continue
-            valid_orders.append(order)
+            valid_order_ids.append(oid)
 
         if valid_order_ids:
-            FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_CANCEL, json.dumps(valid_order_ids))
+            FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_CANCEL, json.dumps({'uid': uid, 'symbol': symbol, 'order_ids': valid_order_ids}))
         return True, orders
 
 
+    ### MMQ interface
+    def on_spot_trades(self, trades: List[Trade]):
+        """ 订单成交
+        1. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
+        2. 冻结资产在订单取消或过期后解冻
+        """
+        
+
+    def on_order(self, order: Order) -> Tuple[bool, str]:
+        """ 现货订单删除
+        2. 若订单存在，系统删除订单
+        3. 若订单不存在，系统返回错误信息
+        """
+
+    def on_removed_orders(self, orders: List[Order]):
+        """ 现货订单删除
+        2. 若订单存在，系统删除订单
+        3. 若订单不存在，系统返回错误信息
+        """
+
+
+
+    async def run_forever(self, topics: List[MMQTopic]):
+        """ run funding engine forever
+        """
+        prev_topic_offsets = {
+            topic: 0 for topic in topics
+        }
+        while True:
+            has_message = False
+            for topic in topics:
+                prev_offset = prev_topic_offsets[topic]
+                queue_offset, message = MATCH_FUNDING_MQ.consume(topic, prev_offset)
+                self.logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
+                if message:
+                    prev_topic_offsets[topic] = queue_offset + 1
+                    data = json.loads(message)
+                    if 'trades' in data:
+                        self.on_trades([Trade.from_dict(trade) for trade in data['trades']])
+
+                    if 'orders' in data:
+                        # batch put orders
+                        self.on_spot_orders(data['orders'])
+                    elif 'order' in data:
+                        # put single order for normal users
+                        self.on_order(data['order'])
+                    if 'removed_orders' in data:
+                        self.on_removed_orders(data['removed_orders'])
+                        
+                    has_message = True
+
+            if has_message:
+                await asyncio.sleep(0.05)
+            else:
+                await asyncio.sleep(0.1)
+
+
 SPOT_FUNDING = Funding([UniMarginAccount("60000001", is_inner_maker=True), UniMarginAccount("60000002")])
+asyncio.run(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
 FUTURE_FUNDING = Funding([UniMarginAccount("60000003", is_inner_maker=True)])

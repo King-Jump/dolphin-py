@@ -1,7 +1,7 @@
 import logging
 from flask import jsonify, current_app
 import time
-#from src.engine.matching.matching import global_spot_engine
+from src.engine.matching.matching import global_spot_engine
 from src.engine.funding.funding import SPOT_FUNDING
 import traceback
 
