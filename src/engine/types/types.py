@@ -1,6 +1,12 @@
 import time
 import uuid
 
+# Market types
+class Market:
+    SPOT = "SPOT"
+    SPOT_LEVERAGE = "SPOT_LEVERAGE"
+    FUTURE = "FUTURE"
+
 # Order types
 class OrderType:
     LIMIT = "LIMIT"

@@ -7,3 +7,4 @@ class SpotAccount:
         self.frozen_balances = {}
         self.version = 0
         self.uptime = int(1000 * time.time())
+
