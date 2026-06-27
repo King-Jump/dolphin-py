@@ -23,7 +23,7 @@ class Funding:
     def put_spot_order(
         self, uid, symbol, side, order_type, time_in_force, quantity,
         price=None, client_order_id=None, is_futures=False
-        ) -> Tuple[bool, Any]:
+        ) -> Tuple[bool, Order]:
         """ RPC interface
         现货订单验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
@@ -74,7 +74,7 @@ class Funding:
             time_in_force=param.get('time_in_force'),
             quantity=float(param.get('quantity')),
             price=float(param.get('price')) if param.get('price') else 0,
-        ) for param in params if param.get('type') == OrderType.LIMIT and param.get('time_in_force') not in [TimeInForce.FOK, TimeInForce.IOC]]
+        ) for param in params if param.get('type') == OrderType.LIMIT and param.get('time_in_force') not in [OrderTimeInForce.FOK, OrderTimeInForce.IOC]]
         FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps([order.to_dict() for order in orders]))
         return True, orders
 
@@ -114,7 +114,7 @@ class Funding:
         """
         
 
-    def on_order(self, order: Order) -> Tuple[bool, str]:
+    def on_spot_order(self, order: Order) -> Tuple[bool, str]:
         """ 现货订单删除
         2. 若订单存在，系统删除订单
         3. 若订单不存在，系统返回错误信息
@@ -157,9 +157,9 @@ class Funding:
                         self.on_spot_orders(data['orders'])
                     elif 'order' in data:
                         # put single order for normal users
-                        self.on_order(data['order'])
+                        self.on_spot_order(Order.from_dict(data['order']))
                     if 'removed_orders' in data:
-                        self.on_removed_orders(data['removed_orders'])
+                        self.on_removed_orders([Order.from_dict(oid) for oid in data['removed_orders']])
                         
                     has_message = True
 

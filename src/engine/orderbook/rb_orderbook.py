@@ -658,7 +658,7 @@ class OrderBook(OrderBookInterface):
                 return None
             order.filled_quantity = filled_quantity
             if order.filled_quantity >= order.quantity:
-                self.remove_order(order_id)
+                self.remove_order(order.uid, order_id)
             return order
 
     def pending_orders(self, uid) -> list[Order]:

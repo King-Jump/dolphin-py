@@ -532,7 +532,7 @@ class MatchingEngine:
 
         MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'trades': [tr.to_dict() for tr in total_trades], 'orders': [order.to_dict() for order in buy_orders + sell_orders]}))
 
-    def on_cancel_orders(self, data: Dict[str, Any]):
+    def on_cancel_orders(self, data: Dict):
         """ MQ interface
             batch cancel orders
         """
