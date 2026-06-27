@@ -7,7 +7,7 @@ from src.engine.types.types import (
     OrderType, OrderSide, OrderStatus, new_trade, empty_order
 )
 from src.common.mmq import FUNDING_MATCH_MQ, MATCH_FUNDING_MQ, MMQTopic
-from typing import List
+from typing import List, Dict
 import asyncio
 import threading
 import time
@@ -532,7 +532,7 @@ class MatchingEngine:
 
         MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'trades': [tr.to_dict() for tr in total_trades], 'orders': [order.to_dict() for order in buy_orders + sell_orders]}))
 
-    def on_cancel_orders(self, data: Dict[str, str|List[str]]):
+    def on_cancel_orders(self, data: Dict[str, Any]):
         """ MQ interface
             batch cancel orders
         """
@@ -554,7 +554,7 @@ class MatchingEngine:
             for topic in topics:
                 prev_offset = prev_topic_offsets[topic]
                 queue_offset, message = FUNDING_MATCH_MQ.consume(topic, prev_offset)
-                self.logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
+                logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
                 if message:
                     prev_topic_offsets[topic] = queue_offset + 1
                     data = json.loads(message)

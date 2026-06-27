@@ -32,7 +32,7 @@ class SpotHandler:
 
             logger.debug(f"Calling create_order with order_type={data.get('type')}, client_order_id={data.get('client_order_id')}")
             # trades, order = global_spot_engine.create_order(
-            result, order = SPOT_FUNDING.create_order(
+            result, order = SPOT_FUNDING.put_spot_order(
                 uid=data['uid'],
                 symbol=symbol,
                 side=data.get('side'),
@@ -111,7 +111,7 @@ class SpotHandler:
                 return jsonify({"code": 400, "msg": f"Symbol {symbol} is not allowed"}), 400
 
             # results = global_spot_engine.cancel_orders(
-            result, orders = SPOT_FUNDING.delete_spot_orders(
+            result, orders = SPOT_FUNDING.cancel_spot_orders(
                 uid=uid,
                 symbol=symbol,
                 order_ids=order_ids

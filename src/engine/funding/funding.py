@@ -3,17 +3,19 @@ from typing import Tuple, List
 import time
 import json
 import asyncio
+import logging
 
-from src.engine.types.types import Market, OrderType, OrderSide, Order, Trade, TimeInForce
+from src.engine.types.types import Market, OrderType, OrderSide, Order, Trade, OrderTimeInForce, OrderStatus
 from src.engine.types.account_types import UniMarginAccount
 from src.common.config.metadata import get_base_quote
 from src.common.mmq import FUNDING_MATCH_MQ, MATCH_FUNDING_MQ, MMQTopic
 #from src.engine.matching.matching import global_spot_engine
 
+logger = logging.getLogger(__name__)
 
 class Funding:
     def __init__(self, accounts: List[UniMarginAccount]):
-        self.accounts = accounts
+        self.accounts = {account.uid: account for account in accounts}
         self.exist_order_ids = Bloom()
         #self.cancelled_order_ids = Bloom()
 
@@ -21,7 +23,7 @@ class Funding:
     def put_spot_order(
         self, uid, symbol, side, order_type, time_in_force, quantity,
         price=None, client_order_id=None, is_futures=False
-        ) -> Tuple[bool, str|Order]:
+        ) -> Tuple[bool, Any]:
         """ RPC interface
         现货订单验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
@@ -40,17 +42,18 @@ class Funding:
             else:
                 amount = price * quantity
 
-            if amount > self.account.balances[quote]:
+            account = self.accounts[uid]
+            if amount > account.balances[quote]:
                 return False, f"Insufficient {quote} balance"
-            self.account.frozen_balances[quote] += amount
-            self.account.balances[quote] -= amount
+            account.frozen_balances[quote] += amount
+            account.balances[quote] -= amount
         else:
-            if quantity > self.account.balances[base]:
+            if quantity > account.balances[base]:
                 return False, f"Insufficient {base} balance"
-            self.account.frozen_balances[base] += quantity
-            self.account.balances[base] -= quantity
+            account.frozen_balances[base] += quantity
+            account.balances[base] -= quantity
         
-        self.account.version += 1
+        account.version += 1
         order = Order(
             uid, symbol, side, order_type, time_in_force, quantity, price,
             client_order_id, is_futures)
@@ -64,6 +67,7 @@ class Funding:
             * drop orders whose time in force is FOK or IOC
         """
         orders = [Order(uid,
+            symbol=param.get('symbol'),
             client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
             side=param.get('side'),
             order_type=param.get('type'),
@@ -87,9 +91,9 @@ class Funding:
                 time_in_force='',
                 quantity=0,
                 price=None,
-                status=OrderStatus.CANCELLING,
                 )
             order.order_id = oid
+            order.status = OrderStatus.CANCELLING
             orders.append(order)
             
             if not oid in self.exist_order_ids:
@@ -116,6 +120,12 @@ class Funding:
         3. 若订单不存在，系统返回错误信息
         """
 
+    def on_spot_orders(self, order: Order) -> Tuple[bool, str]:
+        """ 现货订单删除
+        2. 若订单存在，系统删除订单
+        3. 若订单不存在，系统返回错误信息
+        """
+
     def on_removed_orders(self, orders: List[Order]):
         """ 现货订单删除
         2. 若订单存在，系统删除订单
@@ -135,12 +145,12 @@ class Funding:
             for topic in topics:
                 prev_offset = prev_topic_offsets[topic]
                 queue_offset, message = MATCH_FUNDING_MQ.consume(topic, prev_offset)
-                self.logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
+                logger.debug(f"Consumed message from {topic} offset={queue_offset}: {message}")
                 if message:
                     prev_topic_offsets[topic] = queue_offset + 1
                     data = json.loads(message)
                     if 'trades' in data:
-                        self.on_trades([Trade.from_dict(trade) for trade in data['trades']])
+                        self.on_spot_trades([Trade.from_dict(trade) for trade in data['trades']])
 
                     if 'orders' in data:
                         # batch put orders
