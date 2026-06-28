@@ -81,7 +81,7 @@ class Order:
 
     def from_dict(data: dict):
         order = Order(
-            uid=data["orderId"],
+            uid=data["uid"],
             symbol=data["symbol"],
             side=data["side"],
             order_type=data["type"],
@@ -92,6 +92,7 @@ class Order:
             is_futures=data["isFutures"],
             is_selftrade=data["isSelfTrade"],
         )
+        order.order_id = data["orderId"]
         order.filled_quantity = data["filled_quantity"]
         order.status = data["status"]
         order.timestamp = data["timestamp"]
