@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # Define allowed symbols
 ALLOWED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'JPMUSDT']
+ALLOWED_SYMBOLS = ['90000001', '90000002', '90000003']
 
 from src.api.routes import app
 from src.ws.handlers.handlers import WebSocketHandler
@@ -61,8 +62,8 @@ async def main():
     tasks = [
         # Start WebSocket server
         asyncio.create_task(start_websocket_server()),
-        asyncio.create_task(global_spot_engine.run_forever([MMQTopic.SPOT_NEW])),
-        asyncio.create_task(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW])),
+        asyncio.create_task(global_spot_engine.run_forever([MMQTopic.SPOT_NEW, MMQTopic.SPOT_CANCEL])),
+        asyncio.create_task(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW, MMQTopic.FUNDING_CANCEL])),
         asyncio.create_task(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
     ]
     await asyncio.gather(*tasks)
