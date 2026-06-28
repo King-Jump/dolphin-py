@@ -541,6 +541,7 @@ class MatchingEngine:
         order_ids = data['order_ids']
         order_book = self.get_order_book(symbol)
         removed_ids = order_book.batch_remove_orders(uid, order_ids)
+        logger.debug(f"MONITOR uid={uid} symbol={symbol} removed {len(removed_ids)}/{len(order_ids)}")
         MATCH_FUNDING_MQ.produce(MMQTopic.SPOT_MATCH_OUT, json.dumps({'removed_orders': [order_book.get_order(uid, order_id) for order_id in removed_ids]}))
 
     async def run_forever(self, topics: List[MMQTopic]):

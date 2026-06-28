@@ -140,7 +140,7 @@ class SpotHandler:
             return jsonify({"code": 400, "msg": "uid is required"}), 400
 
         orders = global_spot_engine.get_open_orders(uid=args['uid'], symbol=symbol)
-        logger.debug(f"open_orders: {orders}")
+        logger.debug(f"MONITOR: uid={args['uid']} symbol={symbol} open_orders: {len(orders)}")
         return jsonify({
             "code": 200,
             "data": [

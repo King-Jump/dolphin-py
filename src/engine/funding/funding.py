@@ -114,17 +114,20 @@ class Funding:
         """
         
 
-    def on_spot_order(self, order: Order) -> Tuple[bool, str]:
+    def on_spot_order(self, order: Order):
         """ 现货订单删除
         2. 若订单存在，系统删除订单
         3. 若订单不存在，系统返回错误信息
         """
+        self.exist_order_ids.add(order.order_id)
 
-    def on_spot_orders(self, order: Order) -> Tuple[bool, str]:
+    def on_spot_orders(self, orders: List[Order]):
         """ 现货订单删除
         2. 若订单存在，系统删除订单
         3. 若订单不存在，系统返回错误信息
         """
+        for order in orders:
+            self.exist_order_ids.add(order.order_id)
 
     def on_removed_orders(self, orders: List[Order]):
         """ 现货订单删除
