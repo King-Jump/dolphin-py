@@ -170,5 +170,4 @@ class Funding:
 
 
 SPOT_FUNDING = Funding([UniMarginAccount("60000001", is_inner_maker=True), UniMarginAccount("60000002")])
-asyncio.run(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
 FUTURE_FUNDING = Funding([UniMarginAccount("60000003", is_inner_maker=True)])

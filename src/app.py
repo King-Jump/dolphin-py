@@ -61,3 +61,9 @@ if __name__ == "__main__":
 
     # Start WebSocket server
     asyncio.run(start_websocket_server())
+
+    from src.engine.matching.matching import global_spot_engine, global_futures_engine
+    from src.engine.funding.funding import SPOT_FUNDING
+    asyncio.run(global_spot_engine.run_forever([MMQTopic.SPOT_NEW]))
+    asyncio.run(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW]))
+    asyncio.run(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
