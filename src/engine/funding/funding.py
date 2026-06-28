@@ -54,9 +54,11 @@ class Funding:
             account.balances[base] -= quantity
         
         account.version += 1
-        order = Order(
-            uid, symbol, side, order_type, time_in_force, quantity, price,
-            client_order_id, is_futures)
+        order = Order(uid,
+            symbol=symbol, side=side, order_type=order_type,
+            time_in_force=time_in_force, quantity=quantity, price=price,
+            client_order_id=client_order_id,
+            is_futures=is_futures)
         FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps(order.to_dict()))
         return True, order
 
