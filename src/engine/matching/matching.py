@@ -571,6 +571,6 @@ class MatchingEngine:
 
 # Global trading engine instance
 global_spot_engine = MatchingEngine()
-asyncio.run(global_spot_engine.run_forever(MMQTopic.SPOT_NEW))
+asyncio.run(global_spot_engine.run_forever([MMQTopic.SPOT_NEW]))
 global_futures_engine = MatchingEngine()
-asyncio.run(global_futures_engine.run_forever(MMQTopic.FUNDING_NEW))
+asyncio.run(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW]))
