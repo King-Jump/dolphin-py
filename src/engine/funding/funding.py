@@ -154,7 +154,7 @@ class Funding:
 
                     if 'orders' in data:
                         # batch put orders
-                        self.on_spot_orders(data['orders'])
+                        self.on_spot_orders([Order.from_dict(order) for order in data['orders']])
                     elif 'order' in data:
                         # put single order for normal users
                         self.on_spot_order(Order.from_dict(data['order']))

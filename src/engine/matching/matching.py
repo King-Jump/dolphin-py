@@ -559,9 +559,9 @@ class MatchingEngine:
                     prev_topic_offsets[topic] = queue_offset + 1
                     data = json.loads(message)
                     if type(data) is list:
-                        self.on_orders(data)
+                        self.on_orders([Order.from_dict(order) for order in data])
                     else:
-                        self.on_order(data)
+                        self.on_order(Order.from_dict(data))
                     has_message = True
 
             if has_message:

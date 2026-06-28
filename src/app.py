@@ -56,7 +56,7 @@ def start_flask():
 async def main():
     from src.engine.matching.matching import global_spot_engine, global_futures_engine
     from src.engine.funding.funding import SPOT_FUNDING
-    from src.mq.mq import MMQTopic
+    from src.common.mmq import MMQTopic
 
     tasks = [
         # Start WebSocket server
