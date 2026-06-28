@@ -80,21 +80,23 @@ class Order:
         }
 
     def from_dict(self, data: dict):
-        self.uid = data["uid"]
-        self.order_id = data["orderId"]
-        self.client_order_id = data["clientOrderId"]
-        self.symbol = data["symbol"]
-        self.side = data["side"]
-        self.type = data["type"]
-        self.price = data["price"]
-        self.quantity = data["origQty"]
-        self.time_in_force = data["timeInForce"]
-        self.filled_quantity = data["filled_quantity"]
-        self.status = data["status"]
-        self.timestamp = data["timestamp"]
-        self.update_timestamp = data["update_timestamp"]
-        self.is_selftrade = data["isSelfTrade"]
-        self.is_futures = data["isFutures"]
+        order = Order(
+            uid=data["orderId"],
+            symbol=data["symbol"],
+            side=data["side"],
+            order_type=data["type"],
+            time_in_force=data["timeInForce"],
+            quantity=data["origQty"],
+            price=data["price"],
+            client_order_id=data["clientOrderId"],
+            is_futures=data["isFutures"],
+            is_selftrade=data["isSelfTrade"],
+        )
+        order.filled_quantity = data["filled_quantity"]
+        order.status = data["status"]
+        order.timestamp = data["timestamp"]
+        order.update_timestamp = data["update_timestamp"]
+        return order
 
     def get_market(self) -> Market:
         """ just for prototype """
@@ -132,15 +134,18 @@ class Trade:
         }
 
     def from_dict(self, data: dict):
-        self.trade_id = data["tradeId"]
-        self.taker_uid = data["takerUid"]
-        self.maker_uid = data["makerUid"]
-        self.symbol = data["symbol"]
-        self.price = data["price"]
-        self.quantity = data["quantity"]
-        self.buy_order_id = data["buyOrderId"]
-        self.sell_order_id = data["sellOrderId"]
-        self.timestamp = data["timestamp"]
+        trade = Trade(
+            trade_id=data["tradeId"],
+            taker_uid=data["takerUid"],
+            maker_uid=data["makerUid"],
+            symbol=data["symbol"],
+            price=data["price"],
+            quantity=data["quantity"],
+            buy_order_id=data["buyOrderId"],
+            sell_order_id=data["sellOrderId"],
+        )
+        trade.timestamp = data["timestamp"]
+        return trade
 
 # Order price level
 class OrderLevel:
