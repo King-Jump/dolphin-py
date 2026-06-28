@@ -20,7 +20,7 @@ class OrderBookInterface:
         """
         raise NotImplementedError
     
-    def batch_remove_orders(self, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, order_ids: List[str]) -> List[Order]:
         """ 批量删除订单
         """
         raise NotImplementedError

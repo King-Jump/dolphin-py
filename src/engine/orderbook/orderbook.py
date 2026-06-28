@@ -274,7 +274,7 @@ class OrderBook(OrderBookInterface):
             else:
                 self.asks.push(order)
 
-    def remove_order(self, uid: str, order_id):
+    def remove_order(self, uid: str, order_id) -> Optional[Order]:
         with self.lock:
             order = self.orders.get(order_id)
             if not order or order.uid != uid:
@@ -297,13 +297,14 @@ class OrderBook(OrderBookInterface):
                 self.add_order(order)
             return orders
 
-    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[Order]:
         """ 批量删除订单
         """
+        removed = []
         with self.lock:
             for order_id in order_ids:
-                self.remove_order(uid, order_id)
-            return order_ids
+                removed.append(self.remove_order(uid, order_id))
+            return removed
 
     def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """ 获取订单

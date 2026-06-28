@@ -593,7 +593,7 @@ class OrderBook(OrderBookInterface):
             else:
                 self.asks.push(order)
 
-    def remove_order(self, uid, order_id):
+    def remove_order(self, uid: str, order_id: str) -> Optional[Order]:
         """从订单簿移除订单"""
         with self.lock:
             order = self.orders.get(order_id)
@@ -619,9 +619,10 @@ class OrderBook(OrderBookInterface):
     def batch_remove_orders(self, uid, order_ids):
         """批量删除订单"""
         with self.lock:
+            removed = []
             for order_id in order_ids:
-                self.remove_order(uid, order_id)
-            return order_ids
+                removed.append(self.remove_order(uid, order_id))
+            return removed
 
     def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """获取指定订单"""

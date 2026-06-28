@@ -721,7 +721,7 @@ class OrderBook(OrderBookInterface):
                         for far_order in far_added:
                             self.orders[far_order.order_id] = far_order
 
-    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[str]:
+    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[Order]:
         """批量移除订单"""
         cancel_buy_orders = []
         cancel_sell_orders = []
