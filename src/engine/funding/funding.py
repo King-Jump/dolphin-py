@@ -19,13 +19,8 @@ class Funding:
         self.exist_order_ids = Bloom(1_000_000, 0.01)
         #self.cancelled_order_ids = Bloom()
 
-    ### RPC interface
-    def put_spot_order(
-        self, uid, symbol, side, order_type, time_in_force, quantity,
-        price=None, client_order_id=None, is_futures=False
-        ) -> Tuple[bool, Order]:
-        """ RPC interface
-        现货订单验证
+    def _settlement_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+        """现货订单验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
         2. 若余额充足，立即冻结订单全额对应的资产（买入冻结报价货币USDT，卖出冻结基础货币BTC）
         3. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
@@ -33,16 +28,15 @@ class Funding:
         5. 止损限价单：触发止损价后转为限价单
         6. 市价单卖出，传入参数为基础货币数量，并冻结相应基础货币；市价单买入，传入参数为报价货币数量，并冻结相应报价货币
         """
-        base, quote = get_base_quote(symbol)
-        
-        if side == OrderSide.BUY:
-            if order_type == OrderType.MARKET:
+        base, quote = get_base_quote(order.symbol)
+
+        if order.side == OrderSide.BUY:
+            if order.order_type == OrderType.MARKET:
                 # for market buy: quantity is the amount of quote currency to buy
                 amount = quantity
             else:
                 amount = price * quantity
 
-            account = self.accounts[uid]
             if amount > account.balances[quote]:
                 return False, f"Insufficient {quote} balance"
             account.frozen_balances[quote] += amount
@@ -54,11 +48,57 @@ class Funding:
             account.balances[base] -= quantity
         
         account.version += 1
+        return True, ""
+
+    def _settlement_spot_cancel(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+        """ settlement for cancelling spot order
+            * unfreeze assets according to leave quantity
+        """
+        base, quote = get_base_quote(order.symbol)
+        
+        if order.side == OrderSide.BUY:
+            leave_quantity = order.quantity - order.executed_quantity
+            if leave_quantity > account.frozen_balances[quote]:
+                return False, f"{order.uid} Insufficient {quote} frozen balance"
+
+            if leave_quantity:
+                account.frozen_balances[quote] -= order.quantity
+                account.balances[quote] += leave_quantity
+        else:
+            leave_quantity = order.quantity - order.executed_quantity
+            if leave_quantity > account.frozen_balances[base]:
+                return False, f"{order.uid} Insufficient {base} frozen balance"
+
+            if leave_quantity:
+                account.frozen_balances[base] -= order.quantity
+                account.balances[base] += leave_quantity
+
+        account.version += 1
+        return True, ""
+
+
+
+    ### RPC interface
+    def put_spot_order(
+        self, uid, symbol, side, order_type, time_in_force, quantity,
+        price=None, client_order_id=None, is_futures=False
+    ) -> Tuple[bool, Order]:
+        """ RPC interface
+        """
+        if uid not in self.accounts:
+            return False, f"Account {uid} is not found"
+        
+        account = self.accounts[uid]
         order = Order(uid,
             symbol=symbol, side=side, order_type=order_type,
             time_in_force=time_in_force, quantity=quantity, price=price,
             client_order_id=client_order_id,
             is_futures=is_futures)
+        if not account.is_inner_maker:
+            result, msg = self._settlement_spot_new(account, order)
+            if not result:
+                return False, msg
+
         FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps(order.to_dict()))
         return True, order
 
@@ -68,6 +108,13 @@ class Funding:
             * drop market orders
             * drop orders whose time in force is FOK or IOC
         """
+        if uid not in self.accounts:
+            return False, f"Account {uid} is not found"
+        
+        account = self.accounts[uid]
+        if not account.is_inner_maker:
+            return False, f"Account {uid} is not internal market maker, batch API is not allowed"
+
         orders = [Order(uid,
             symbol=param.get('symbol'),
             client_order_id=param.get('client_order_id') or str(int(time.time() * 1000)),
@@ -83,6 +130,11 @@ class Funding:
     def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, List[Order]]:
         """ batch cancel spot orders, only for internal market maker
         """
+        if uid not in self.accounts:
+            return False, f"Account {uid} is not found"
+        
+        account = self.accounts[uid]
+
         valid_order_ids = []
         orders = []
         for oid in order_ids:
@@ -104,6 +156,12 @@ class Funding:
             valid_order_ids.append(oid)
 
         if valid_order_ids:
+            if not account.is_inner_maker:
+                for order in orders:
+                    if order.order_id in valid_order_ids:
+                        result, msg = self._settlement_spot_cancel(account, order)
+                        if not result:
+                            return False, msg
             FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_CANCEL, json.dumps({'uid': uid, 'symbol': symbol, 'order_ids': valid_order_ids}))
         return True, orders
 
