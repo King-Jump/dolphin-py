@@ -74,8 +74,6 @@ class SpotHandler:
                 return jsonify({"code": 400, "msg": "uid is required"}), 400
 
             params = data.get('batchOrders', [])
-            results = []
-
             #_, orders = global_spot_engine.create_orders(
             result, orders = SPOT_FUNDING.put_spot_orders(
                 uid=data['uid'],
@@ -85,19 +83,20 @@ class SpotHandler:
                 return jsonify({
                     "code": 200,
                     "data": [{
-                    "symbol": order.symbol,
-                    "orderId": order.order_id,
-                    "clientOrderId": order.client_order_id,
-                    "timeInForce": order.time_in_force,
-                    "transactTime": order.timestamp,
-                    "price": order.price,
-                    "origQty": order.quantity,
-                    "executedQty": order.filled_quantity,
-                    "status": order.status,
-                    "type": order.type,
-                    "side": order.side
-                } for order in orders]
-            })
+                        "symbol": order.symbol,
+                        "orderId": order.order_id,
+                        "clientOrderId": order.client_order_id,
+                        "timeInForce": order.time_in_force,
+                        "transactTime": order.timestamp,
+                        "price": order.price,
+                        "origQty": order.quantity,
+                        "executedQty": order.filled_quantity,
+                        "status": order.status,
+                        "type": order.type,
+                        "side": order.side
+                    } for order in orders]
+                })
+            return jsonify({"code": 400, "msg": str(orders)}), 400
         except Exception as e:
             traceback.print_exc()
             return jsonify({"code": 500, "msg": str(e)}), 500
