@@ -50,6 +50,8 @@ class MMQ:
                 relative_offset = offset - self.messages_base[topic]
                 self.messages_offset[topic] = relative_offset
             relative_offset = self.messages_offset[topic]
+            if relative_offset >= len(self.messages[topic]):
+                return offset, ""
             return offset, self.messages[topic][relative_offset]
 
 FUNDING_MATCH_MQ = MMQ()
