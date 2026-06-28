@@ -53,17 +53,23 @@ async def start_websocket_server():
 def start_flask():
     app.run(host="0.0.0.0", port=8763, debug=False)
 
+async def main():
+    from src.engine.matching.matching import global_spot_engine, global_futures_engine
+    from src.engine.funding.funding import SPOT_FUNDING
+    tasks = [
+        # Start WebSocket server
+        asyncio.run_task(start_websocket_server()),
+        asyncio.create_task(global_spot_engine.run_forever([MMQTopic.SPOT_NEW])),
+        asyncio.create_task(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW])),
+        asyncio.create_task(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
+    ]
+    await asyncio.gather(*tasks)
+
 if __name__ == "__main__":
     # Start Flask server in a separate thread
     flask_thread = threading.Thread(target=start_flask)
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Start WebSocket server
-    asyncio.run(start_websocket_server())
+    asyncio.run(main())
 
-    from src.engine.matching.matching import global_spot_engine, global_futures_engine
-    from src.engine.funding.funding import SPOT_FUNDING
-    asyncio.run(global_spot_engine.run_forever([MMQTopic.SPOT_NEW]))
-    asyncio.run(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW]))
-    asyncio.run(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
