@@ -83,7 +83,7 @@ class Funding:
         """
         valid_order_ids = []
         orders = []
-        for oid in self.exist_order_ids:
+        for oid in order_ids:
             order = Order(uid,
                 symbol=symbol,
                 side='',
