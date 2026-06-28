@@ -56,9 +56,11 @@ def start_flask():
 async def main():
     from src.engine.matching.matching import global_spot_engine, global_futures_engine
     from src.engine.funding.funding import SPOT_FUNDING
+    from src.mq.mq import MMQTopic
+
     tasks = [
         # Start WebSocket server
-        asyncio.run_task(start_websocket_server()),
+        asyncio.create_task(start_websocket_server()),
         asyncio.create_task(global_spot_engine.run_forever([MMQTopic.SPOT_NEW])),
         asyncio.create_task(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW])),
         asyncio.create_task(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
