@@ -207,6 +207,9 @@ class SortedBaseArray:
                         new_values[write_idx] = (order.order_id, order.price, order.timestamp)
                         write_idx += 1
                         break
+                    if write_idx >= self.max_size:
+                        break
+
                 if read_idx >= self._capacity and write_idx < self.max_size:
                     new_values[write_idx] = (order.order_id, order.price, order.timestamp)
                     write_idx += 1
