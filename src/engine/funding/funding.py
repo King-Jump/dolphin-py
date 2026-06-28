@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class Funding:
     def __init__(self, accounts: List[UniMarginAccount]):
         self.accounts = {account.uid: account for account in accounts}
-        self.exist_order_ids = Bloom()
+        self.exist_order_ids = Bloom(1_000_000, 0.01)
         #self.cancelled_order_ids = Bloom()
 
     ### RPC interface
