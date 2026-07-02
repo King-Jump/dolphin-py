@@ -587,6 +587,8 @@ class OrderBook(OrderBookInterface):
     def add_order(self, order):
         """添加订单到订单簿"""
         with self.lock:
+            if order.order_id in self.orders:
+                return False
             self.orders[order.order_id] = order
             if order.side == OrderSide.BUY:
                 self.bids.push(order)
