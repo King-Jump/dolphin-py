@@ -15,53 +15,103 @@ import time
 
 
 class PriceLevel:
-    def __init__(self, price: float, level: int, index: int = 0):
+    def __init__(self, price: float, level: int, level_index: int = 0, orders_head: LevelOrder = None):
         self.forward = [None] * level  # 指向各层下一个节点的指针列表
         # forward[0] 指向底层下一个节点，forward[1] 指向第1层下一个节点...
-        self.index = index  # index in free_levels list
+        self.level_index = level_index  # index in free_levels list
 
         # price is the key of the skip list
         self.price = price
-        self.level_head = LevelOrder(0)
+        self.level_head = orders_head
 
 class LevelOrder:
     """ 相同价格的订单列表，使用预分配的数组链表，数组默认大小为size，超出size时扩容，数组为0时释放
     """
-    def __init__(self, index: int):
+    def __init__(self, order_index: int, order: Order = None):
         self.prev = None
         self.next = None
         # 指向OrderPool.orders数组的索引
-        self.index = index
+        self.order_index = order_index
+        self.order = order  # 订单对象
 
 class OrderPool:
     """ 订单池，用于存储所有订单，预分配内存避免GC
     """
     def __init__(self, max_orders: int):
         self.max_order_size = max_orders  # max number of orders
-        self.orders = [None] * max_orders
-
         self.capacity = 0   # number of orders
+
         # list of orders with the same price
-        self.free_orders = [LevelOrder(i) for i in range(self.max_order_size)]
-        self.free_orders_ptr = list(range(1, self.max_order_size+1))
+        self.free_orders = [LevelOrder(i) for i in range(max_orders)]
+        self.free_orders_ptr = list(range(1, max_orders+1))
         self.free_ptr_head = 0
 
-    def size(self) -> int:
-        return self.capacity
-        
+    def is_full(self) -> bool:
+        return self.capacity >= self.max_order_size
+
+    def new(self, order: Order) -> Optional[LevelOrder]:
+        if self.capacity >= self.max_order_size:
+            return None
+
+        # allocate a new node from free node list
+        node = self.free_orders[self.free_ptr_head]
+        node.order_index = self.free_ptr_head
+        node.order = order
+
+        # remove the node from free node list
+        self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
+        self.capacity += 1
+        return node
+
+    def free(self, node: LevelOrder):
+        # add the node to free node list
+        self.free_orders_ptr[node.order_index] = self.free_ptr_head
+        self.free_ptr_head = node.order_index
+        node.order = None
+        node.order_index = -1
+        self.capacity -= 1
+
+
 class PriceLevelPool:
     """ 价格挡位对象池，用于存储所有价格挡位，预分配内存避免GC
     """
     def __init__(self, max_price_level: int):
-        self.level_capacity = 0   # number of nodes
         self.max_level_size = max_price_level  # max number of nodes
+        self.level_capacity = 0   # number of price levels
+
         # list of price levels
-        self.free_levels = [PriceLevel(0, max_price_level, i) for i in range(self.max_level_size)]
-        self.free_levels_ptr = list(range(1, self.max_level_size+1))
+        self.free_levels = [PriceLevel(0, max_price_level, i) for i in range(max_level_size)]
+        self.free_levels_ptr = list(range(1, max_level_size+1))
         self.free_ptr_head = 0
 
-    def size(self) -> int:
-        return self.level_capacity
+    def is_full(self) -> bool:
+        return self.level_capacity >= self.max_level_size
+
+    def new(self, price: float, level: int) -> Optional[PriceLevel]:
+        if self.level_capacity >= self.max_level_size:
+            return None
+
+        # allocate a new node from free node list
+        node = self.free_levels[self.free_ptr_head]
+        node.price = price
+        node.level_head.prev = None
+        node.level_head.next = None
+        node.forward = [None] * level
+
+        # remove the node from free node list
+        self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
+        self.level_capacity += 1
+        return node
+
+    def free(self, node: PriceLevel) -> LevelOrder:
+        # add the node to free node list
+        self.free_levels_ptr[node.level_index] = self.free_ptr_head
+        self.free_ptr_head = node.level_index
+        self.level_capacity -= 1
+
+        node.price = 0
+        return node.level_head
+
 
 class SkipList:
     def __init__(self, max_index_level=16, pN=4, price_level_pool: PriceLevelPool=None, order_pool: OrderPool=None):
@@ -72,53 +122,17 @@ class SkipList:
         self.price_level_pool = price_level_pool
         self.order_pool = order_pool
 
-
-
-    def _new_node(self, price: float, level: int):
-        if self.capacity >= self.max_level_size:
-            # 超过最大挡位，删除最远价格
-            farest_level = self.head.forward[0]
-            while farest_level.forward[0]:
-                farest_level = farest_level.forward[0]
-
-            update = [None] * self.max_index_level
-            current = self.head
-
-            # 从最高层开始查找，记录每一层的前驱
-            for lvl in range(self.level - 1, -1, -1):
-                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
-                    current = current.forward[lvl]
-                update[lvl] = current
-            self._clear(farest_level, update)
-
-        # allocate a new node from free node list
-        node = self.free_levels[self.free_ptr_head]
-        node.price = price
-        node.forward = [None] * level
-
-        # remove the node from free node list
-        self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
-        self.capacity += 1
-        return node
-
-    def _free_node(self, node: PriceLevel):
-        # add the node to free node list
-        node.order = None
-        self.free_nodes_ptr[node.index] = self.free_ptr_head
-        self.free_ptr_head = node.index
-        self.capacity -= 1
-
     def _random_level(self):
         """随机生成新节点的层数（1 到 max_level 之间）"""
         lvl = 1
         # 每次以概率1/pN 增加一层，直到达到上限
-        for _ in range(self.max_level-1):
+        for _ in range(self.max_index_level-1):
             if random.randint(1, 100) % self.pN == 0:
                 lvl += 1
         return lvl
 
     def _clear(self, target: PriceLevel, update: List[PriceLevel]):
-        """ clear the target node from skip list
+        """ clear the target PriceLevel from skip list
         """
         for lvl in range(len(target.forward)):
             update[lvl].forward[lvl] = target.forward[lvl]
@@ -142,7 +156,6 @@ class SkipList:
         return None
 
     def insert(self, order: Order) -> bool:
-        """插入键值对，若键已存在则更新值"""
         # update 数组用于记录每一层插入位置的前驱节点
         update = [None] * self.max_index_level
         current = self.head
@@ -159,6 +172,22 @@ class SkipList:
 
             return True
 
+        if self.price_level_pool.is_full():
+            # 超过最大挡位，删除最远价格
+            farest_level = self.head.forward[0]
+            while farest_level.forward[0]:
+                farest_level = farest_level.forward[0]
+
+            update = [None] * self.max_index_level
+            current = self.head
+
+            # 从最高层开始查找，记录每一层的前驱
+            for lvl in range(self.level - 1, -1, -1):
+                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
+                    current = current.forward[lvl]
+                update[lvl] = current
+            self._clear(farest_level, update)
+
         # 生成新price level数
         rand_level = self._random_level()
         # 如果新节点的层数超过当前跳表的最高层，需要将多出的层的前驱指向头节点
@@ -166,6 +195,22 @@ class SkipList:
             for lvl in range(self.level, rand_level):
                 update[lvl] = self.head
             self.level = rand_level
+
+        if self.order_pool.is_full():
+            # 超过最大订单数量，删除最远订单
+            farest_level = self.head.forward[0]
+            while farest_level.forward[0]:
+                farest_level = farest_level.forward[0]
+
+            update = [None] * self.max_index_level
+            current = self.head
+
+            # 从最高层开始查找，记录每一层的前驱
+            for lvl in range(self.level - 1, -1, -1):
+                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
+                    current = current.forward[lvl]
+                update[lvl] = current
+            self._clear(farest_level, update)
 
         new_price_level = self._new_node(order.price, rand_level)
         # 将新节点插入到各层链表中
