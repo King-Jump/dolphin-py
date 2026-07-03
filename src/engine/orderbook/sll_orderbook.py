@@ -6,7 +6,7 @@
     * 新加入订单首先查询跳表，找到相同价格的PriceLevel，然后插入到该挡位orders的末尾
 """
 from src.engine.orderbook.orderbook import OrderBookInterface
-from src.engine.types.types import Order, OrderSide, OrdderBook as OrderBookModel
+from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
 from typing import List, Optional, Tuple
 import threading
 import random
@@ -25,7 +25,7 @@ class PriceLevel:
         self.level = level  # 本节点跳表层数
         self.order_num = 0  # 订单数量
         self.level_head = LevelOrder(-1)
-        self.level_tail.next = self.level_head
+        self.level_tail = self.level_head
 
 class LevelOrder:
     """ 相同价格的订单列表，使用预分配的数组链表，数组默认大小为size，超出size时扩容，数组为0时释放
@@ -99,6 +99,8 @@ class PriceLevelPool:
         node.price = price
         node.level_head.prev = None
         node.level_head.next = None
+        node.level_tail = node.level_head
+        node.order_num = 0
         node.level = level
         for i in range(len(node.forward)):
             node.forward[i] = None
@@ -108,14 +110,14 @@ class PriceLevelPool:
         self.level_capacity += 1
         return node
 
-    def free(self, node: PriceLevel) -> LevelOrder:
+    def free(self, node: PriceLevel) -> Optional[LevelOrder]:
         # add the node to free node list
         self.free_levels_ptr[node.level_index] = self.free_ptr_head
         self.free_ptr_head = node.level_index
         self.level_capacity -= 1
 
         node.price = 0
-        return node.level_head
+        return node.level_head.next
 
 
 class SkipList:
@@ -160,28 +162,30 @@ class SkipList:
             return candidate
         return None
 
-    def remove_farest_level(self):
-        """删除最远挡位的全部订单
+    def delete_farest_level(self) -> List[Order]:
+        """删除最远挡位的全部订单，返回删除的订单列表
         """
         # 定位最远挡位
         farest_level = self.head.forward[0]
         while farest_level.forward[0]:
             farest_level = farest_level.forward[0]
-        # 释放该挡位下的所有订单，包括head
-        order_node = farest_level.level_head
+        # 释放该挡位下的所有订单，不包括head节点
+        orders = []
+        order_node = farest_level.level_head.next
         while order_node:
-            next_order = order_node.next
+            orders.append(order_node.order)
             self.order_pool.free(order_node)
-            order_node = next_order
+            order_node = order_node.next
 
         update = [None] * self.max_index_level
         current = self.head
         # 从最高层开始查找，记录每一层的前驱
         for lvl in range(self.level - 1, -1, -1):
-            while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
+            while current.forward[lvl] and self._compare(current.forward[lvl].price, farest_level.price) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
         self._free_price_level(farest_level, update)
+        return orders
 
     def insert(self, order: Order) -> bool:
         # update 数组用于记录每一层插入位置的前驱节点
@@ -204,6 +208,7 @@ class SkipList:
             new_order.prev = price_level.level_tail
             new_order.next = None
             price_level.level_tail.next = new_order
+            price_level.level_tail = new_order
             price_level.order_num += 1
             return True
 
@@ -230,6 +235,7 @@ class SkipList:
         new_order.prev = new_price_level.level_tail
         new_order.next = None
         new_price_level.level_tail.next = new_order
+        new_price_level.level_tail = new_order
         new_price_level.order_num += 1
         return True
 
@@ -272,8 +278,8 @@ class SkipList:
     def peek(self) -> Optional[Order]:
         """ peek the first order in the array
         """
-        if self.head.forward[0]:
-            return self.head.forward[0].order
+        if self.head.forward[0] and self.head.forward[0].level_head.next:
+            return self.head.forward[0].level_head.next.order
         return None
 
     def pop(self) -> Optional[Order]:
@@ -282,46 +288,26 @@ class SkipList:
         if not self.head.forward[0]:
             return None
 
-        node = self.head.forward[0]
-        order = node.order
-        for lvl in range(self.level):
-            if self.head.forward[lvl] and self.head.forward[lvl].order.order_id == order.order_id:
-                self.head.forward[lvl] = self.head.forward[lvl].forward[lvl]
-
-        while self.level > 1 and self.head.forward[self.level - 1] is None:
-            self.level -= 1
-
-        self.price_level_pool.free(node)
+        top_level = self.head.forward[0]
+        order = top_level.order
+        self.delete(order)
         return order
 
     def peek_depth(self, depth: int) -> List[Tuple[float, float]]:
         """ peek the first depth orders in the array
         """
-        if self.capacity == 0:
-            return []
-
-        level = 0
         levels = []
-        current = self.head.forward[0]
-        for i in range(depth):
-            if current.forward[0]:
-                current = current.forward[0]
-            else:
+        current_level = self.head.forward[0]
+        for _ in range(depth):
+            if not current_level:
                 break
-        curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
-        while current.forward[0]:
-            current = current.forward[0]
-            price, qty = current.order.price, current.order.quantity - current.order.filled_quantity
-            if price != curr_price:
-                levels.append((curr_price, curr_qty))
-                level += 1
-                if level > depth:
-                    break
-
-                curr_price = price
-                curr_qty = qty
-            else:
-                curr_qty += qty
+            level_qty = 0
+            curr_order = current_level.level_head.next
+            while curr_order:
+                level_qty += curr_order.order.quantity - curr_order.order.filled_quantity
+                curr_order = curr_order.next
+            levels.append((current_level.price, level_qty))
+            current_level = current_level.forward[0]
 
         return levels
 
@@ -359,13 +345,15 @@ class BidSkipList(SkipList):
 class OrderBook(OrderBookInterface):
     """ 单币对最多支持max_nodes个订单，超出限制则主动撤最远的订单
     """
-    def __init__(self, symbol,  max_price_level=1_000, max_orders=100_000, logger=None):
+    def __init__(self, symbol,  max_price_level=1_000, max_orders=20_000, logger=None):
         self.symbol = symbol
-        self.price_level_pool = PriceLevelPool(max_price_level)
-        self.order_pool = OrderPool(max_orders)
+        self.ask_price_level_pool = PriceLevelPool(max_price_level)
+        self.ask_order_pool = OrderPool(max_orders)
+        self.ask_price_level_pool = PriceLevelPool(max_price_level)
+        self.ask_order_pool = OrderPool(max_orders)
 
-        self.asks = AskSkipList(self.price_level_pool, self.order_pool)
-        self.bids = BidSkipList(self.price_level_pool, self.order_pool)
+        self.asks = AskSkipList(self.ask_price_level_pool, self.ask_order_pool)
+        self.bids = BidSkipList(self.bid_price_level_pool, self.bid_order_pool)
         self.orders = {}
         self.ask_lock = threading.Lock()
         self.bid_lock = threading.Lock()
@@ -378,36 +366,28 @@ class OrderBook(OrderBookInterface):
         if order.order_id in self.orders:
             return None
 
-        self.orders[order.order_id] = order
-        if order.side == OrderSide.Buy:
-            with self.ask_lock:
-                self.asks.insert(order)
-                if self.asks.is_full():
-                    # 订单薄打满后，主动撤掉1%的远单
-                    self.asks.pop(int(self.max_nodes * 0.01))
+        removed_orders = []
+        if order.side == OrderSide.BUY:
+            if self.bid_price_level_pool.is_full() or self.bid_order_pool.is_full():
+                # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
+                with self.bid_lock:
+                    removed_orders = self.bids.delete_farest_level()
         else:
+            if self.ask_price_level_pool.is_full() or self.ask_order_pool.is_full():
+                # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
+                with self.ask_lock:
+                    removed_orders = self.asks.delete_farest_level()
+        for ro in removed_orders:
+            del self.orders[ro.order_id]
+
+        self.orders[order.order_id] = order
+        if order.side == OrderSide.BUY:
             with self.bid_lock:
                 self.bids.insert(order)
-                if self.bids.is_full():
-                    # 订单薄打满后，主动撤掉1%的远单
-                    self.bids.pop(int(self.max_nodes * 0.01))
+        else:
+            with self.ask_lock:
+                self.asks.insert(order)
         return order
-
-        if self.price_level_pool.is_full():
-            # 超过最大挡位，删除最远价格
-            farest_level = self.head.forward[0]
-            while farest_level.forward[0]:
-                farest_level = farest_level.forward[0]
-
-            update = [None] * self.max_index_level
-            current = self.head
-
-            # 从最高层开始查找，记录每一层的前驱
-            for lvl in range(self.level - 1, -1, -1):
-                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
-                    current = current.forward[lvl]
-                update[lvl] = current
-            self._clear(farest_level, update)
 
     def remove_order(self, order_id: str) -> Optional[Order]:
         """ 删除订单
@@ -416,15 +396,16 @@ class OrderBook(OrderBookInterface):
             return None
         order = self.orders[order_id]
 
-        if order.side == OrderSide.Buy:
+        if order.side == OrderSide.BUY:
+            with self.bid_lock:
+                self.bids.delete(order)
+        else:
             with self.ask_lock:
                 self.asks.delete(order)
-        else:
-            self.bids.delete(order)
         del self.orders[order_id]
         return order
 
-    def batch_add_orders(self, orders: List[Order]) -> List[Order]:
+    def batch_add_orders(self, side: str, orders: List[Order]) -> List[Order]:
         """ 批量添加订单
         """
         results = []
@@ -433,14 +414,14 @@ class OrderBook(OrderBookInterface):
                 results.append(order)
         return results
 
-    def batch_remove_orders(self, orders: List[Order]) -> List[str]:
+    def batch_remove_orders(self, orders: List[Order]) -> List[Order]:
         """ 批量删除订单
         """
-        ids = []
+        results = []
         for order in orders:
             if self.remove_order(order.order_id):
-                ids.append(order.order_id)
-        return ids
+                results.append(order)
+        return results
 
     def get_order(self, uid: str, order_id: str) -> Optional[Order]:
         """ 获取订单
@@ -454,8 +435,10 @@ class OrderBook(OrderBookInterface):
         """ 获取订单薄
         """
         ob = OrderBookModel(self.symbol)
-        ob.asks = self.asks.peek_depth(depth)
-        ob.bids = self.bids.peek_depth(depth)
+        with self.ask_lock:
+            ob.asks = self.asks.peek_depth(depth)
+        with self.bid_lock:
+            ob.bids = self.bids.peek_depth(depth)
         ob.timestamp = int(time.time() * 1000)
         return ob
 
