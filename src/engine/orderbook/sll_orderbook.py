@@ -15,14 +15,17 @@ import time
 
 
 class PriceLevel:
-    def __init__(self, price: float, level: int, level_index: int = 0, orders_head: LevelOrder = None):
+    def __init__(self, price: float, level: int, level_index: int = 0):
         self.forward = [None] * level  # 指向各层下一个节点的指针列表
         # forward[0] 指向底层下一个节点，forward[1] 指向第1层下一个节点...
         self.level_index = level_index  # index in free_levels list
 
         # price is the key of the skip list
         self.price = price
-        self.level_head = orders_head
+        self.level = level  # 本节点跳表层数
+        self.order_num = 0  # 订单数量
+        self.level_head = LevelOrder(-1)
+        self.level_tail.next = self.level_head
 
 class LevelOrder:
     """ 相同价格的订单列表，使用预分配的数组链表，数组默认大小为size，超出size时扩容，数组为0时释放
@@ -55,11 +58,10 @@ class OrderPool:
 
         # allocate a new node from free node list
         node = self.free_orders[self.free_ptr_head]
-        node.order_index = self.free_ptr_head
         node.order = order
 
         # remove the node from free node list
-        self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
+        self.free_ptr_head = self.free_orders_ptr[self.free_ptr_head]
         self.capacity += 1
         return node
 
@@ -68,20 +70,21 @@ class OrderPool:
         self.free_orders_ptr[node.order_index] = self.free_ptr_head
         self.free_ptr_head = node.order_index
         node.order = None
-        node.order_index = -1
         self.capacity -= 1
 
 
 class PriceLevelPool:
     """ 价格挡位对象池，用于存储所有价格挡位，预分配内存避免GC
+        * max_index_level: 跳表最大层数
+        * max_price_level: 价格挡位最大数量
     """
-    def __init__(self, max_price_level: int):
+    def __init__(self, max_index_level: int, max_price_level: int):
         self.max_level_size = max_price_level  # max number of nodes
         self.level_capacity = 0   # number of price levels
 
         # list of price levels
-        self.free_levels = [PriceLevel(0, max_price_level, i) for i in range(max_level_size)]
-        self.free_levels_ptr = list(range(1, max_level_size+1))
+        self.free_levels = [PriceLevel(0, max_index_level, i) for i in range(max_price_level)]
+        self.free_levels_ptr = list(range(1, max_price_level+1))
         self.free_ptr_head = 0
 
     def is_full(self) -> bool:
@@ -96,7 +99,9 @@ class PriceLevelPool:
         node.price = price
         node.level_head.prev = None
         node.level_head.next = None
-        node.forward = [None] * level
+        node.level = level
+        for i in range(len(node.forward)):
+            node.forward[i] = None
 
         # remove the node from free node list
         self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
@@ -117,7 +122,7 @@ class SkipList:
     def __init__(self, max_index_level=16, pN=4, price_level_pool: PriceLevelPool=None, order_pool: OrderPool=None):
         self.max_index_level = max_index_level     # 最大层数限制（防止无限增长）
         self.pN = pN                     # 向上提升的概率1/pN（通常0.5或0.25）
-        self.head = PriceLevel(0, max_index_level)  # 头节点，贯穿所有层
+        self.head = PriceLevel(0, max_index_level, -1)  # 头节点，贯穿所有层
         self.level = 1                 # 当前跳表的有效最大层数（从1开始）
         self.price_level_pool = price_level_pool
         self.order_pool = order_pool
@@ -131,29 +136,52 @@ class SkipList:
                 lvl += 1
         return lvl
 
-    def _clear(self, target: PriceLevel, update: List[PriceLevel]):
+    def _free_price_level(self, target: PriceLevel, update: List[PriceLevel]):
         """ clear the target PriceLevel from skip list
         """
-        for lvl in range(len(target.forward)):
+        for lvl in range(target.level):
             update[lvl].forward[lvl] = target.forward[lvl]
 
         # 调整跳表的当前有效最大层数：若顶层已空，则降低 level
         while self.level > 1 and self.head.forward[self.level - 1] is None:
             self.level -= 1
 
-        self._free_node(target)
+        self.price_level_pool.free(target)
 
     def search(self, order: Order) -> Optional[PriceLevel]:
-        """查找指定键，返回值，不存在则返回 None"""
+        """查找指定价格对应的挡位，返回挡位head，不存在则返回 None"""
         current = self.head
         for lvl in range(self.level - 1, -1, -1):
             while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
                 current = current.forward[lvl]
-        # 到达底层，current 指向最后一个键 < key 的节点
+        # 到达底层，current 指向最后一个键 < order.price 的节点
         candidate = current.forward[0]
         if candidate and candidate.price == order.price:
             return candidate
         return None
+
+    def remove_farest_level(self):
+        """删除最远挡位的全部订单
+        """
+        # 定位最远挡位
+        farest_level = self.head.forward[0]
+        while farest_level.forward[0]:
+            farest_level = farest_level.forward[0]
+        # 释放该挡位下的所有订单，包括head
+        order_node = farest_level.level_head
+        while order_node:
+            next_order = order_node.next
+            self.order_pool.free(order_node)
+            order_node = next_order
+
+        update = [None] * self.max_index_level
+        current = self.head
+        # 从最高层开始查找，记录每一层的前驱
+        for lvl in range(self.level - 1, -1, -1):
+            while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
+                current = current.forward[lvl]
+            update[lvl] = current
+        self._free_price_level(farest_level, update)
 
     def insert(self, order: Order) -> bool:
         # update 数组用于记录每一层插入位置的前驱节点
@@ -167,28 +195,19 @@ class SkipList:
             update[lvl] = current
 
         # 检查键是否已存在（底层下一个节点）
-        candidate = current.forward[0]
-        if candidate and candidate.price == order.price:
-
+        price_level = current.forward[0]
+        if price_level and price_level.price == order.price:
+            # 找到当前价格挡位，首先申请订单对象，再将新订单插入PriceLevel的order列表末尾
+            new_order = self.order_pool.new(order)
+            if not new_order:
+                return False
+            new_order.prev = price_level.level_tail
+            new_order.next = None
+            price_level.level_tail.next = new_order
+            price_level.order_num += 1
             return True
 
-        if self.price_level_pool.is_full():
-            # 超过最大挡位，删除最远价格
-            farest_level = self.head.forward[0]
-            while farest_level.forward[0]:
-                farest_level = farest_level.forward[0]
-
-            update = [None] * self.max_index_level
-            current = self.head
-
-            # 从最高层开始查找，记录每一层的前驱
-            for lvl in range(self.level - 1, -1, -1):
-                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
-                    current = current.forward[lvl]
-                update[lvl] = current
-            self._clear(farest_level, update)
-
-        # 生成新price level数
+        # 生成新price level
         rand_level = self._random_level()
         # 如果新节点的层数超过当前跳表的最高层，需要将多出的层的前驱指向头节点
         if rand_level > self.level:
@@ -196,74 +215,71 @@ class SkipList:
                 update[lvl] = self.head
             self.level = rand_level
 
-        if self.order_pool.is_full():
-            # 超过最大订单数量，删除最远订单
-            farest_level = self.head.forward[0]
-            while farest_level.forward[0]:
-                farest_level = farest_level.forward[0]
-
-            update = [None] * self.max_index_level
-            current = self.head
-
-            # 从最高层开始查找，记录每一层的前驱
-            for lvl in range(self.level - 1, -1, -1):
-                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
-                    current = current.forward[lvl]
-                update[lvl] = current
-            self._clear(farest_level, update)
-
-        new_price_level = self._new_node(order.price, rand_level)
-        # 将新节点插入到各层链表中
+        new_price_level = self.price_level_pool.new(order.price, rand_level)
+        if not new_price_level:
+            return False
+        # 将新PriceLevel节点插入到跳表各层链表中
         for lvl in range(rand_level):
             new_price_level.forward[lvl] = update[lvl].forward[lvl]
             update[lvl].forward[lvl] = new_price_level
 
+        # 将新订单插入到price level的order列表末尾
+        new_order = self.order_pool.new(order)
+        if not new_order:
+            return False
+        new_order.prev = new_price_level.level_tail
+        new_order.next = None
+        new_price_level.level_tail.next = new_order
+        new_price_level.order_num += 1
         return True
 
     def delete(self, order: Order) -> bool:
-        """删除指定键, 返回 True 表示成功, False 表示键不存在"""
-        update = [None] * self.max_level
+        """删除指定订单, 返回 True 表示成功, False 表示键不存在"""
+        # 首先找到订单所属的price level
+        update = [None] * self.max_index_level
         current = self.head
 
-        # 查找并记录各层前驱
+        # 从最高层开始查找，记录每一层的前驱
         for lvl in range(self.level - 1, -1, -1):
             while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
                 current = current.forward[lvl]
             update[lvl] = current
 
-        target = current.forward[0]
-        if not target or target.order.order_id != order.order_id:
+        price_level = current.forward[0]
+        if not price_level or price_level.price != order.price:
             return False
 
-        self._clear(target, update)
+        # 释放LevelOrder对象
+        current_order = price_level.level_head.next
+        while current_order:
+            if current_order.order.order_id == order.order_id:
+                current_order.prev.next = current_order.next
+                if current_order.next:
+                    current_order.next.prev = current_order.prev
+                break
+            current_order = current_order.next
 
+        if not current_order:
+            return False
+
+        self.order_pool.free(current_order)
+        price_level.order_num -= 1
+        if price_level.order_num == 0:
+            # 当前价格挡位已经没有订单，删除该挡位
+            self._free_price_level(price_level, update)
         return True
-
-    def batch_insert(self, orders: List[Order]) -> List[Order]:
-        results = []
-        for order in orders:
-            if self.insert(order):
-                results.append(order)
-        return results
-
-    def batch_delete(self, orders: List[Order]) -> List[str]:
-        ids = []
-        for order in orders:
-            if self.delete(order):
-                ids.append(order.order_id)
-        return ids
 
     def peek(self) -> Optional[Order]:
         """ peek the first order in the array
         """
-        if self.capacity == 0:
-            return None
-        return self.head.forward[0].order
+        if self.head.forward[0]:
+            return self.head.forward[0].order
+        return None
 
     def pop(self) -> Optional[Order]:
         """ pop the first order in the array
         """
-        if self.capacity == 0:
+        if not self.head.forward[0]:
             return None
 
         node = self.head.forward[0]
@@ -275,7 +291,7 @@ class SkipList:
         while self.level > 1 and self.head.forward[self.level - 1] is None:
             self.level -= 1
 
-        self._free_node(node)
+        self.price_level_pool.free(node)
         return order
 
     def peek_depth(self, depth: int) -> List[Tuple[float, float]]:
@@ -287,6 +303,11 @@ class SkipList:
         level = 0
         levels = []
         current = self.head.forward[0]
+        for i in range(depth):
+            if current.forward[0]:
+                current = current.forward[0]
+            else:
+                break
         curr_price, curr_qty = current.order.price, current.order.quantity - current.order.filled_quantity
         while current.forward[0]:
             current = current.forward[0]
@@ -301,8 +322,7 @@ class SkipList:
                 curr_qty = qty
             else:
                 curr_qty += qty
-        if level <= depth:
-            levels.append((curr_price, curr_qty))
+
         return levels
 
 class AskSkipList(SkipList):
@@ -372,6 +392,22 @@ class OrderBook(OrderBookInterface):
                     # 订单薄打满后，主动撤掉1%的远单
                     self.bids.pop(int(self.max_nodes * 0.01))
         return order
+
+        if self.price_level_pool.is_full():
+            # 超过最大挡位，删除最远价格
+            farest_level = self.head.forward[0]
+            while farest_level.forward[0]:
+                farest_level = farest_level.forward[0]
+
+            update = [None] * self.max_index_level
+            current = self.head
+
+            # 从最高层开始查找，记录每一层的前驱
+            for lvl in range(self.level - 1, -1, -1):
+                while current.forward[lvl] and self._compare(current.forward[lvl].price, order.price) < 0:
+                    current = current.forward[lvl]
+                update[lvl] = current
+            self._clear(farest_level, update)
 
     def remove_order(self, order_id: str) -> Optional[Order]:
         """ 删除订单
