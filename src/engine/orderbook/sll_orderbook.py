@@ -166,11 +166,15 @@ class SkipList:
         """删除最远挡位的全部订单，返回删除的订单列表
         """
         # 定位最远挡位
-        farest_level = self.head.forward[0]
+        farest_level = self.head
         while farest_level.forward[0]:
             farest_level = farest_level.forward[0]
         # 释放该挡位下的所有订单，不包括head节点
         orders = []
+        if not farest_level.level_head.next:
+            # 防御编程，该档位没有订单，异常！
+            return orders
+
         order_node = farest_level.level_head.next
         while order_node:
             orders.append(order_node.order)
@@ -223,15 +227,16 @@ class SkipList:
         new_price_level = self.price_level_pool.new(order.price, rand_level)
         if not new_price_level:
             return False
+        new_order = self.order_pool.new(order)
+        if not new_order:
+            return False
+
         # 将新PriceLevel节点插入到跳表各层链表中
         for lvl in range(rand_level):
             new_price_level.forward[lvl] = update[lvl].forward[lvl]
             update[lvl].forward[lvl] = new_price_level
 
         # 将新订单插入到price level的order列表末尾
-        new_order = self.order_pool.new(order)
-        if not new_order:
-            return False
         new_order.prev = new_price_level.level_tail
         new_order.next = None
         new_price_level.level_tail.next = new_order
@@ -262,6 +267,8 @@ class SkipList:
                 current_order.prev.next = current_order.next
                 if current_order.next:
                     current_order.next.prev = current_order.prev
+                if current_order == price_level.level_tail:
+                    price_level.level_tail = current_order.prev
                 break
             current_order = current_order.next
 
@@ -285,11 +292,11 @@ class SkipList:
     def pop(self) -> Optional[Order]:
         """ pop the first order in the array
         """
-        if not self.head.forward[0]:
+        if not self.head.forward[0] or not self.head.forward[0].level_head.next:
             return None
 
         top_level = self.head.forward[0]
-        order = top_level.order
+        order = top_level.level_head.next.order
         self.delete(order)
         return order
 
@@ -345,15 +352,15 @@ class BidSkipList(SkipList):
 class OrderBook(OrderBookInterface):
     """ 单币对最多支持max_nodes个订单，超出限制则主动撤最远的订单
     """
-    def __init__(self, symbol,  max_price_level=1_000, max_orders=20_000, logger=None):
+    def __init__(self, symbol, max_index_level=16, max_price_level=1_000, max_orders=20_000, logger=None):
         self.symbol = symbol
-        self.ask_price_level_pool = PriceLevelPool(max_price_level)
+        self.ask_price_level_pool = PriceLevelPool(max_index_level, max_price_level)
         self.ask_order_pool = OrderPool(max_orders)
-        self.ask_price_level_pool = PriceLevelPool(max_price_level)
-        self.ask_order_pool = OrderPool(max_orders)
+        self.bid_price_level_pool = PriceLevelPool(max_index_level, max_price_level)
+        self.bid_order_pool = OrderPool(max_orders)
 
-        self.asks = AskSkipList(self.ask_price_level_pool, self.ask_order_pool)
-        self.bids = BidSkipList(self.bid_price_level_pool, self.bid_order_pool)
+        self.asks = AskSkipList(max_level=max_index_level, price_level_pool=self.ask_price_level_pool, order_pool=self.ask_order_pool)
+        self.bids = BidSkipList(max_level=max_index_level, price_level_pool=self.bid_price_level_pool, order_pool=self.bid_order_pool)
         self.orders = {}
         self.ask_lock = threading.Lock()
         self.bid_lock = threading.Lock()
@@ -378,15 +385,18 @@ class OrderBook(OrderBookInterface):
                 with self.ask_lock:
                     removed_orders = self.asks.delete_farest_level()
         for ro in removed_orders:
-            del self.orders[ro.order_id]
+            if ro.order_id in self.orders:
+                del self.orders[ro.order_id]
 
-        self.orders[order.order_id] = order
         if order.side == OrderSide.BUY:
             with self.bid_lock:
-                self.bids.insert(order)
+                if not self.bids.insert(order):
+                    return None
         else:
             with self.ask_lock:
-                self.asks.insert(order)
+                if not self.asks.insert(order):
+                    return None
+        self.orders[order.order_id] = order
         return order
 
     def remove_order(self, order_id: str) -> Optional[Order]:
