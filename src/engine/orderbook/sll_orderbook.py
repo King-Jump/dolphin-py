@@ -379,23 +379,24 @@ class OrderBook(OrderBookInterface):
                 # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
                 with self.bid_lock:
                     removed_orders = self.bids.delete_farest_level()
+                    for ro in removed_orders:
+                        if ro.order_id in self.orders:
+                            del self.orders[ro.order_id]
+
+                    if not self.bids.insert(order):
+                        return None
         else:
             if self.ask_price_level_pool.is_full() or self.ask_order_pool.is_full():
                 # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
                 with self.ask_lock:
                     removed_orders = self.asks.delete_farest_level()
-        for ro in removed_orders:
-            if ro.order_id in self.orders:
-                del self.orders[ro.order_id]
+                    for ro in removed_orders:
+                        if ro.order_id in self.orders:
+                            del self.orders[ro.order_id]
 
-        if order.side == OrderSide.BUY:
-            with self.bid_lock:
-                if not self.bids.insert(order):
-                    return None
-        else:
-            with self.ask_lock:
-                if not self.asks.insert(order):
-                    return None
+                    if not self.asks.insert(order):
+                        return None
+
         self.orders[order.order_id] = order
         return order
 

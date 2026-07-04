@@ -171,8 +171,8 @@ class OrderBook:
     def to_dict(self):
         return {
             "symbol": self.symbol,
-            "bids": [bid.to_dict() for bid in self.bids],
-            "asks": [ask.to_dict() for ask in self.asks],
+            "bids": self.bids,
+            "asks": self.asks,
             "timestamp": self.timestamp
         }
 
