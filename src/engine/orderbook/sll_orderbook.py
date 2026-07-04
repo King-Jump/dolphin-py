@@ -229,6 +229,7 @@ class SkipList:
             return False
         new_order = self.order_pool.new(order)
         if not new_order:
+            self.price_level_pool.free(new_price_level)
             return False
 
         # 将新PriceLevel节点插入到跳表各层链表中
@@ -373,29 +374,28 @@ class OrderBook(OrderBookInterface):
         if order.order_id in self.orders:
             return None
 
-        removed_orders = []
         if order.side == OrderSide.BUY:
-            if self.bid_price_level_pool.is_full() or self.bid_order_pool.is_full():
-                # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
-                with self.bid_lock:
+            with self.bid_lock:
+                if self.bid_price_level_pool.is_full() or self.bid_order_pool.is_full():
+                    # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
                     removed_orders = self.bids.delete_farest_level()
                     for ro in removed_orders:
                         if ro.order_id in self.orders:
                             del self.orders[ro.order_id]
 
-                    if not self.bids.insert(order):
-                        return None
+                if not self.bids.insert(order):
+                    return None
         else:
-            if self.ask_price_level_pool.is_full() or self.ask_order_pool.is_full():
-                # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
-                with self.ask_lock:
+            with self.ask_lock:
+                if self.ask_price_level_pool.is_full() or self.ask_order_pool.is_full():
+                    # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
                     removed_orders = self.asks.delete_farest_level()
                     for ro in removed_orders:
                         if ro.order_id in self.orders:
                             del self.orders[ro.order_id]
 
-                    if not self.asks.insert(order):
-                        return None
+                if not self.asks.insert(order):
+                    return None
 
         self.orders[order.order_id] = order
         return order
@@ -425,12 +425,15 @@ class OrderBook(OrderBookInterface):
                 results.append(order)
         return results
 
-    def batch_remove_orders(self, orders: List[Order]) -> List[Order]:
+    def batch_remove_orders(self, uid: str, order_ids: List[str]) -> List[Order]:
         """ 批量删除订单
         """
         results = []
-        for order in orders:
-            if self.remove_order(order.order_id):
+        for order_id in order_ids:
+            order = self.orders.get(order_id)
+            if not order or order.uid != uid:
+                continue
+            if order and self.remove_order(order_id):
                 results.append(order)
         return results
 

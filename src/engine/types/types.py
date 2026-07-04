@@ -161,7 +161,7 @@ class OrderLevel:
         }
 
 # Order book model
-class OrderBook:
+class OrderBookModel:
     def __init__(self, symbol):
         self.symbol = symbol
         self.bids = []

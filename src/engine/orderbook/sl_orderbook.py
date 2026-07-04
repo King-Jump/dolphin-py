@@ -10,7 +10,7 @@ import logging
 from typing import Tuple, List, Optional, Dict
 from functools import cmp_to_key
 
-from src.engine.types.types import Order, OrderSide, OrderStatus, OrderBook as OrderBookModel
+from src.engine.types.types import Order, OrderSide, OrderStatus, OrderBookModel
 from src.engine.orderbook.ob_interface import OrderBookInterface
 
 MAX_NEAR_SIZE = 1_000

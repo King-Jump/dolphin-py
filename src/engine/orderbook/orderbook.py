@@ -1,5 +1,5 @@
 import time
-from src.engine.types.types import Order, OrderSide, OrderStatus, OrderLevel, OrderBook as OrderBookModel
+from src.engine.types.types import Order, OrderSide, OrderStatus, OrderBookModel
 import threading
 from src.engine.orderbook.ob_interface import OrderBookInterface
 from typing import List, Optional
