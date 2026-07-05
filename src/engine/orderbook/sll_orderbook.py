@@ -465,7 +465,7 @@ class OrderBook(OrderBookInterface):
             return self.asks.peek()
 
     def update_order(self, order_id: str, filled_quantity: float) -> Optional[Order]:
-        """ 更新订单
+        """ 更新maker订单
         """
         order = self.orders.get(order_id)
         if not order:

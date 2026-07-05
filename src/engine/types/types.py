@@ -49,6 +49,8 @@ class Order:
         self.type = order_type
         self.price = price
         self.quantity = quantity
+        self.executed_quantity = 0  # 已成交数量
+        self.executed_amount = 0    # 已成交金额
         self.time_in_force = time_in_force
         self.is_futures = is_futures
         self.filled_quantity = 0
@@ -77,6 +79,8 @@ class Order:
             "update_timestamp": self.update_timestamp,
             "isSelfTrade": self.is_selftrade,
             "isFutures": self.is_futures,
+            "executed_quantity": self.executed_quantity,
+            "executed_amount": self.executed_amount,
         }
 
     @staticmethod
@@ -86,6 +90,8 @@ class Order:
             symbol=data["symbol"],
             side=data["side"],
             order_type=data["type"],
+            executed_quantity=data.get("executed_quantity", 0),
+            executed_amount=data.get("executed_amount", 0),
             time_in_force=data["timeInForce"],
             quantity=data["origQty"],
             price=data["price"],

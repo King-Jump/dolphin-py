@@ -156,19 +156,26 @@ class MatchingEngine:
         return trades
 
     def _process_market_order(self, order_book, order):
+        """ 处理市场订单
+            order.quantity is the amount of quote for market buy
+        """
         trades = []
 
         if order.side == OrderSide.BUY:
-            # Market buy order matches all sell orders
+            # Market buy order matches all sell orders, at least 2U for each trade
             while order.filled_quantity < order.quantity:
                 best_ask = order_book.get_best_ask()
                 if not best_ask:
                     break
 
-                # Calculate match quantity
-                match_quantity = order.quantity - order.filled_quantity
-                if match_quantity > best_ask.quantity - best_ask.filled_quantity:
+                # Calculate match amount
+                taker_amount = order.quantity - order.filled_quantity
+                if taker_amount > best_ask.price * (best_ask.quantity - best_ask.filled_quantity):
+                    # maker order is full filled
                     match_quantity = best_ask.quantity - best_ask.filled_quantity
+                else:
+                    # market taker is full filled
+                    match_quantity = taker_amount / best_ask.price
 
                 # Generate trade
                 trade = new_trade(
@@ -184,7 +191,7 @@ class MatchingEngine:
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
 
                 # Update order filled quantity
-                order.filled_quantity += match_quantity
+                order.filled_quantity += match_quantity * best_ask.price
                 best_ask.filled_quantity += match_quantity
 
                 # Check if sell order is fully filled

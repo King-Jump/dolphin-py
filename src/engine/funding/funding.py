@@ -20,39 +20,35 @@ class Funding:
         #self.cancelled_order_ids = Bloom()
 
     def _settlement_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
-        """现货订单验证
+        """ 进入撮合前，现货订单验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
         2. 若余额充足，立即冻结订单全额对应的资产（买入冻结报价货币USDT，卖出冻结基础货币BTC）
-        3. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
-        4. 若订单未成交，冻结资产在订单取消或过期后解冻
-        5. 止损限价单：触发止损价后转为限价单
-        6. 市价单卖出，传入参数为基础货币数量，并冻结相应基础货币；市价单买入，传入参数为报价货币数量，并冻结相应报价货币
+        3. 市价单卖出，传入参数为基础货币数量，并冻结相应基础货币；市价单买入，传入参数为报价货币数量，并冻结相应报价货币
         """
         base, quote = get_base_quote(order.symbol)
 
         if order.side == OrderSide.BUY:
             if order.order_type == OrderType.MARKET:
                 # for market buy: quantity is the amount of quote currency to buy
-                amount = quantity
+                amount = order.quantity
             else:
-                amount = price * quantity
+                amount = order.price * order.quantity
 
             if amount > account.balances[quote]:
                 return False, f"Insufficient {quote} balance"
             account.frozen_balances[quote] += amount
             account.balances[quote] -= amount
         else:
-            if quantity > account.balances[base]:
+            if order.quantity > account.balances[base]:
                 return False, f"Insufficient {base} balance"
-            account.frozen_balances[base] += quantity
-            account.balances[base] -= quantity
+            account.frozen_balances[base] += order.quantity
+            account.balances[base] -= order.quantity
         
         account.version += 1
         return True, ""
 
     def _settlement_spot_cancel(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
-        """ settlement for cancelling spot order
-            * unfreeze assets according to leave quantity
+        """ 若订单未成交，冻结资产在订单取消或过期后解冻
         """
         base, quote = get_base_quote(order.symbol)
         
