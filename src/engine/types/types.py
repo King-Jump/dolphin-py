@@ -79,7 +79,8 @@ class Order:
             "isFutures": self.is_futures,
         }
 
-    def from_dict(self, data: dict):
+    @staticmethod
+    def from_dict(data: dict):
         order = Order(
             uid=data["uid"],
             symbol=data["symbol"],
@@ -134,7 +135,8 @@ class Trade:
             "timestamp": self.timestamp
         }
 
-    def from_dict(self, data: dict):
+    @staticmethod
+    def from_dict(data: dict):
         trade = Trade(
             trade_id=data["tradeId"],
             taker_uid=data["takerUid"],

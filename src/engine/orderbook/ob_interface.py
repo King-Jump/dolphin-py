@@ -1,5 +1,5 @@
 from typing import Optional, List
-from src.engine.types.types import Order, OrderBook
+from src.engine.types.types import Order, OrderBookModel
 
 
 class OrderBookInterface:
@@ -30,7 +30,7 @@ class OrderBookInterface:
         """
         raise NotImplementedError
 
-    def get_order_book(self, depth: int = 10) -> OrderBook:
+    def get_order_book(self, depth: int = 10) -> OrderBookModel:
         """ 获取订单簿
         """
         raise NotImplementedError

@@ -6,7 +6,7 @@
     * 新加入订单首先查询跳表，找到相同价格的PriceLevel，然后插入到该挡位orders的末尾
 """
 from src.engine.orderbook.orderbook import OrderBookInterface
-from src.engine.types.types import Order, OrderSide, OrderBook as OrderBookModel
+from src.engine.types.types import Order, OrderSide, OrderBookModel
 from typing import List, Optional, Tuple
 import threading
 import random
