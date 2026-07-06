@@ -566,7 +566,7 @@ class MatchingEngine:
                 if message:
                     prev_topic_offsets[topic] = queue_offset + 1
                     data = json.loads(message)
-                    if topic == MMQTopic.SPOT_CANCEL:
+                    if topic == MMQTopic.MATCH_IN_SPOT_CANCEL:
                         self.on_cancel_orders(data)
                         continue
                     # topic == MMQTopic.SPOT_NEW

@@ -8,8 +8,8 @@ import threading
 MAX_MESSAGES = 10_000
 
 class MMQTopic:
-    SPOT_NEW = "spot_new"
-    SPOT_CANCEL = "spot_cancel"
+    MATCH_IN_SPOT_NEW = "spot_new"
+    MATCH_IN_SPOT_CANCEL = "spot_cancel"
     FUNDING_NEW = "funding_new"
     FUNDING_CANCEL = "funding_cancel"
 

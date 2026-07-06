@@ -20,7 +20,7 @@ class Funding:
         #self.cancelled_order_ids = Bloom()
 
     def _settlement_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
-        """ 进入撮合前，现货订单验证
+        """ 进入撮合前，现货订单资产验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
         2. 若余额充足，立即冻结订单全额对应的资产（买入冻结报价货币USDT，卖出冻结基础货币BTC）
         3. 市价单卖出，传入参数为基础货币数量，并冻结相应基础货币；市价单买入，传入参数为报价货币数量，并冻结相应报价货币
@@ -49,24 +49,28 @@ class Funding:
 
     def _settlement_spot_cancel(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
         """ 若订单未成交，冻结资产在订单取消或过期后解冻
+            市价单和限价单都有可能被取消，对于市价买单的撤单，解冻的是quote资产
         """
         base, quote = get_base_quote(order.symbol)
         
         if order.side == OrderSide.BUY:
-            leave_quantity = order.quantity - order.executed_quantity
-            if leave_quantity > account.frozen_balances[quote]:
+            if order.order_type == OrderType.MARKET:
+                leave_amount = order.quantity - order.filled_quantity
+            else:
+                leave_amount = order.price * (order.quantity - order.filled_quantity)
+            if leave_amount > account.frozen_balances[quote]:
                 return False, f"{order.uid} Insufficient {quote} frozen balance"
 
-            if leave_quantity:
-                account.frozen_balances[quote] -= order.quantity
-                account.balances[quote] += leave_quantity
-        else:
-            leave_quantity = order.quantity - order.executed_quantity
+            if leave_amount:
+                account.frozen_balances[quote] -= leave_amount
+                account.balances[quote] += leave_amount
+        else: # sell side
+            leave_quantity = order.quantity - order.filled_quantity
             if leave_quantity > account.frozen_balances[base]:
                 return False, f"{order.uid} Insufficient {base} frozen balance"
 
             if leave_quantity:
-                account.frozen_balances[base] -= order.quantity
+                account.frozen_balances[base] -= leave_quantity
                 account.balances[base] += leave_quantity
 
         account.version += 1
@@ -95,7 +99,8 @@ class Funding:
             if not result:
                 return False, msg
 
-        FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps(order.to_dict()))
+        # produce spot new order to match engine
+        FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_NEW, json.dumps(order.to_dict()))
         return True, order
 
     def put_spot_orders(self, uid: str, params: list) -> Tuple[bool, List[Order]]:
@@ -120,7 +125,9 @@ class Funding:
             quantity=float(param.get('quantity')),
             price=float(param.get('price')) if param.get('price') else 0,
         ) for param in params if param.get('type') == OrderType.LIMIT and param.get('time_in_force') not in [OrderTimeInForce.FOK, OrderTimeInForce.IOC]]
-        FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_NEW, json.dumps([order.to_dict() for order in orders]))
+        
+        # produce spot new orders to match engine
+        FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_NEW, json.dumps([order.to_dict() for order in orders]))
         return True, orders
 
     def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, List[Order]]:
@@ -158,7 +165,7 @@ class Funding:
                         result, msg = self._settlement_spot_cancel(account, order)
                         if not result:
                             return False, msg
-            FUNDING_MATCH_MQ.produce(MMQTopic.SPOT_CANCEL, json.dumps({'uid': uid, 'symbol': symbol, 'order_ids': valid_order_ids}))
+            FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_CANCEL, json.dumps({'uid': uid, 'symbol': symbol, 'order_ids': valid_order_ids}))
         return True, orders
 
 

@@ -62,7 +62,7 @@ async def main():
     tasks = [
         # Start WebSocket server
         asyncio.create_task(start_websocket_server()),
-        asyncio.create_task(global_spot_engine.run_forever([MMQTopic.SPOT_NEW, MMQTopic.SPOT_CANCEL])),
+        asyncio.create_task(global_spot_engine.run_forever([MMQTopic.MATCH_IN_SPOT_NEW, MMQTopic.MATCH_IN_SPOT_CANCEL])),
         asyncio.create_task(global_futures_engine.run_forever([MMQTopic.FUNDING_NEW, MMQTopic.FUNDING_CANCEL])),
         asyncio.create_task(SPOT_FUNDING.run_forever([MMQTopic.SPOT_MATCH_OUT]))
     ]

@@ -49,8 +49,8 @@ class Order:
         self.type = order_type
         self.price = price
         self.quantity = quantity
-        self.executed_quantity = 0  # 已成交数量
-        self.executed_amount = 0    # 已成交金额
+        self.filled_quantity = 0  # 已成交数量
+        self.filled_amount = 0    # 已成交金额
         self.time_in_force = time_in_force
         self.is_futures = is_futures
         self.filled_quantity = 0
@@ -79,8 +79,8 @@ class Order:
             "update_timestamp": self.update_timestamp,
             "isSelfTrade": self.is_selftrade,
             "isFutures": self.is_futures,
-            "executed_quantity": self.executed_quantity,
-            "executed_amount": self.executed_amount,
+            "filled_quantity": self.filled_quantity,
+            "filled_amount": self.filled_amount,
         }
 
     @staticmethod
@@ -90,8 +90,6 @@ class Order:
             symbol=data["symbol"],
             side=data["side"],
             order_type=data["type"],
-            executed_quantity=data.get("executed_quantity", 0),
-            executed_amount=data.get("executed_amount", 0),
             time_in_force=data["timeInForce"],
             quantity=data["origQty"],
             price=data["price"],
@@ -101,6 +99,7 @@ class Order:
         )
         order.order_id = data["orderId"]
         order.filled_quantity = data["filled_quantity"]
+        order.filled_amount = data["filled_amount"]
         order.status = data["status"]
         order.timestamp = data["timestamp"]
         order.update_timestamp = data["update_timestamp"]
@@ -218,7 +217,7 @@ def new_trade(taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_
 
 # Create new order book
 def new_order_book(symbol):
-    return OrderBook(symbol)
+    return OrderBookModel(symbol)
 
 # Create new ticker
 def new_ticker(symbol, price, quantity):
