@@ -116,7 +116,7 @@ class Order:
         
 # Trade model
 class Trade:
-    def __init__(self, trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id):
+    def __init__(self, trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id, is_taker_buyer=True):
         self.trade_id = trade_id
         self.taker_uid = taker_uid
         self.maker_uid = maker_uid
@@ -125,6 +125,7 @@ class Trade:
         self.quantity = quantity
         self.buy_order_id = buy_order_id
         self.sell_order_id = sell_order_id
+        self.is_taker_buyer = is_taker_buyer
         self.timestamp = int(time.time() * 1000)
 
     def to_dict(self):
@@ -137,7 +138,8 @@ class Trade:
             "quantity": self.quantity,
             "buyOrderId": self.buy_order_id,
             "sellOrderId": self.sell_order_id,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "isTakerBuyer": self.is_taker_buyer,
         }
 
     @staticmethod
@@ -151,6 +153,7 @@ class Trade:
             quantity=data["quantity"],
             buy_order_id=data["buyOrderId"],
             sell_order_id=data["sellOrderId"],
+            is_taker_buyer=data["isTakerBuyer"],
         )
         trade.timestamp = data["timestamp"]
         return trade
@@ -211,9 +214,9 @@ def empty_order(uid, order_id, symbol):
     return order
 
 # Create new trade
-def new_trade(taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id):
+def new_trade(taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id, is_taker_buyer):
     trade_id = str(uuid.uuid4())
-    return Trade(trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id)
+    return Trade(trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id, is_taker_buyer)
 
 # Create new order book
 def new_order_book(symbol):

@@ -168,26 +168,58 @@ class Funding:
             FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_CANCEL, json.dumps({'uid': uid, 'symbol': symbol, 'order_ids': valid_order_ids}))
         return True, orders
 
+    def _settlement_spot_trade(self, trade: Trade) -> bool:
+        """ 订单成交后，冻结资产划转至对方账户，用户收到对应资产
+        """
+        base, quote = get_base_quote(trade.symbol)
+
+        taker = self.accounts.get(trade.taker_uid)
+        maker = self.accounts.get(trade.maker_uid)
+        if not taker and not maker:
+            logger.error(f"Taker {trade.taker_uid} and Maker {trade.maker_uid} is not found of Trade {trade.to_dict()}")
+            return False
+
+        if trade.is_taker_buyer:
+            # move quote from taker to maker, move base from maker to taker
+            amount = trade.quantity * trade.price
+            if taker:
+                taker.frozen_balances[quote] -= amount
+                if base not in taker.balances:
+                    taker.balances[base] = 0
+                taker.balances[base] += trade.quantity
+            if maker:
+                maker.frozen_balances[quote] += amount
+                maker.balances[base] -= trade.quantity
+        else:
+            # move quote from maker to taker, move base from taker to maker
+            amount = trade.quantity * trade.price
+            if maker:
+                maker.frozen_balances[quote] -= amount
+                if base not in maker.balances:
+                    maker.balances[base] = 0
+                maker.balances[base] += trade.quantity
+            if taker:
+                taker.frozen_balances[quote] += amount
+                taker.balances[base] -= trade.quantity
+        return True
 
     ### MMQ interface
     def on_spot_trades(self, trades: List[Trade]):
         """ 订单成交
-        1. 订单成交后，冻结资产划转至对方账户，用户收到对应资产
-        2. 冻结资产在订单取消或过期后解冻
+            订单成交后，冻结资产划转至对方账户，用户收到对应资产
         """
+        for trade in trades:
+            if not self._settlement_spot_trade(trade):
+                continue
         
 
     def on_spot_order(self, order: Order):
-        """ 现货订单删除
-        2. 若订单存在，系统删除订单
-        3. 若订单不存在，系统返回错误信息
+        """ 铺单成功：记录订单ID
         """
         self.exist_order_ids.add(order.order_id)
 
     def on_spot_orders(self, orders: List[Order]):
-        """ 现货订单删除
-        2. 若订单存在，系统删除订单
-        3. 若订单不存在，系统返回错误信息
+        """ 批量铺单成功：记录订单ID
         """
         for order in orders:
             self.exist_order_ids.add(order.order_id)
@@ -238,5 +270,6 @@ class Funding:
                 await asyncio.sleep(0.1)
 
 
+FEE_ACCOUNT = UniMarginAccount("60000000")
 SPOT_FUNDING = Funding([UniMarginAccount("60000001", is_inner_maker=True), UniMarginAccount("60000002")])
 FUTURE_FUNDING = Funding([UniMarginAccount("60000003", is_inner_maker=True)])

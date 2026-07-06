@@ -77,7 +77,8 @@ class MatchingEngine:
                     price=best_ask.price,
                     quantity=match_quantity,
                     buy_order_id=order.order_id,
-                    sell_order_id=best_ask.order_id
+                    sell_order_id=best_ask.order_id,
+                    is_taker_buyer=True
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
@@ -126,7 +127,8 @@ class MatchingEngine:
                     price=best_bid.price,
                     quantity=match_quantity,
                     buy_order_id=best_bid.order_id,
-                    sell_order_id=order.order_id
+                    sell_order_id=order.order_id,
+                    is_taker_buyer=False
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_bid.price, match_quantity)
@@ -187,7 +189,8 @@ class MatchingEngine:
                     price=best_ask.price,
                     quantity=match_quantity,
                     buy_order_id=order.order_id,
-                    sell_order_id=best_ask.order_id
+                    sell_order_id=best_ask.order_id,
+                    is_taker_buyer=True
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_ask.price, match_quantity)
@@ -223,7 +226,8 @@ class MatchingEngine:
                     price=best_bid.price,
                     quantity=match_quantity,
                     buy_order_id=best_bid.order_id,
-                    sell_order_id=order.order_id
+                    sell_order_id=order.order_id,
+                    is_taker_buyer=False
                 )
                 trades.append(trade)
                 self.update_klines(order.symbol, best_bid.price, match_quantity)
@@ -381,7 +385,8 @@ class MatchingEngine:
             price,
             quantity,
             int(time.time() * 1000),
-            int(time.time() * 1000)
+            int(time.time() * 1000),
+            True
         )
         with self.lock:
             self.trades[symbol].append(trade)
