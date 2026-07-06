@@ -15,6 +15,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
+MIN_MATCH_AMOUNT = 2 # USDDT
+
 class MatchingEngine:
     def __init__(self):
         self.order_books = {}
@@ -163,7 +165,7 @@ class MatchingEngine:
 
         if order.side == OrderSide.BUY:
             # Market buy order matches all sell orders, at least 2U for each trade
-            while order.filled_quantity < order.quantity:
+            while order.filled_quantity + MIN_MATCH_AMOUNT < order.quantity:
                 best_ask = order_book.get_best_ask()
                 if not best_ask:
                     break
