@@ -29,10 +29,19 @@ class UniMarginAccount:
         with self.lock:
             self.balances[asset] -= amount
     
-    def add_frozen_balance(self, asset: str, amount: float):
+    def add_frozen_balance(self, order_id: str, asset: str, amount: float):
         with self.lock:
-            self.frozen_balances[asset] += amount
+            if order_id not in self.frozen_balances:
+                self.frozen_balances[order_id] = {}
+            self.frozen_balances[order_id][asset] += amount
     
-    def sub_frozen_balance(self, asset: str, amount: float):
+    def sub_frozen_balance(self, order_id: str, asset: str, amount: float) -> bool:
         with self.lock:
-            self.frozen_balances[asset] -= amount
+            if self.free_frozen_balance[order_id][asset] < amount:
+                return False
+            self.frozen_balances[order_id][asset] -= amount
+            return True
+
+    def free_frozen_balance(self, order_id: str):
+        with self.lock:
+            del self.frozen_balances[order_id]
