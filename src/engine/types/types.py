@@ -58,6 +58,7 @@ class Order:
         self.timestamp = int(time.time() * 1000)
         self.update_timestamp = int(time.time() * 1000)
         self.is_selftrade = is_selftrade
+        self.trade_num = 0  # 分笔成交次数
 
     def __repr__(self) -> str:
         return self.order_id

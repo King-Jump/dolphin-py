@@ -1,6 +1,7 @@
 import time
 import threading
 
+
 class UniMarginAccount:
     def __init__(self, uid: str, is_inner_maker: bool = False):
         self.uid = uid
@@ -9,7 +10,8 @@ class UniMarginAccount:
         self.frozen_balances = {}
         self.version = 0
         self.uptime = int(1000 * time.time())
-        
+
+        self.spot_leverage = 1        
         self.lock = threading.Lock()
 
         self.air_drop()
@@ -20,6 +22,13 @@ class UniMarginAccount:
             self.balances['BTC'] = 10_000
             self.balances['ETH'] = 100_000
             self.balances['JPM'] = 1_000_000_000
+
+    def get_spot_leverage(self) -> float:
+        return self.spot_leverage
+
+    def set_spot_leverage(self, leverage: float):
+        with self.lock:
+            self.spot_leverage = leverage
 
     def add_balance(self, asset: str, amount: float):
         with self.lock:

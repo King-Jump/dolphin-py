@@ -65,7 +65,6 @@ class Funding:
         if order.order_id not in account.frozen_balances:
             return False, f"order {order.order_id} is not frozen."
 
-\
         for asset, leave_quantity in account.frozen_balances[order.order_id].items():
             if leave_quantity:
                 account.add_balance(asset, leave_quantity)
@@ -92,10 +91,22 @@ class Funding:
             # move quote from taker to maker, move base from maker to taker
             amount = trade.quantity * trade.price
             if taker: # buyer
-                taker.frozen_balances[quote] -= amount
+                taker.sub_frozen_balance(trade.buy_order_id, quote, amount)
+                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, False, trade.taker_uid)
+                fee = round(amount * fee_rate, fee_decimal)
+                taker.sub_frozen_balance(trade.buy_order_id, 'fee', fee)
+
+                if taker.frozen_balances[quote] <= 0:
+                    # full filled
+                    if taker.frozen_balances['fee'] > 0:
+                        # release fee
+                        taker.add_balance('fee', taker.frozen_balances['fee'])
+                    taker.free_frozen_balance(trade.buy_order_id)
+                
                 if base not in taker.balances:
                     taker.balances[base] = 0
-                fee = amount * get_fee(Market.SPOT, trade.symbol, False, trade.taker_uid)
+                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, False, trade.taker_uid)
+                fee = round(amount * fee_rate, fee_decimal)
                 taker.balances[base] += trade.quantity
             if maker: # seller
                 maker.frozen_balances[quote] += amount
