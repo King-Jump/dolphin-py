@@ -11,7 +11,7 @@ class UniMarginAccount:
         self.version = 0
         self.uptime = int(1000 * time.time())
 
-        self.spot_leverage = 1        
+        self.spot_leverage = 1        # default leverage is 1x
         self.lock = threading.Lock()
 
         self.air_drop()
@@ -54,3 +54,16 @@ class UniMarginAccount:
     def free_frozen_balance(self, order_id: str):
         with self.lock:
             del self.frozen_balances[order_id]
+
+
+class Position:
+    def __init__(self, symbol: str, side: str, amount: float, price: float, leverage: float):
+        self.symbol = symbol
+        self.side = side
+        self.amount = amount
+        self.price = price
+        self.leverage = leverage
+        self.position_id = f"{symbol}_{side}_{amount}_{price}_{leverage}"
+        self.position_type = "spot"
+        self.position_status = "open"
+        self.position_time = int(1000 * time.time())

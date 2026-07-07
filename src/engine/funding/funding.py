@@ -60,6 +60,7 @@ class Funding:
         """ 若订单未成交，冻结资产在订单取消或过期后解冻，逐笔冻结和释放，避免逻辑错误
             * 市价单和限价单都有可能被取消，对于市价买单的撤单，解冻的是quote资产
             * 对于买单，还需要释放冻结的fee
+            ** 在执行撤单之前，必须保证该订单所有成交都已经扣费
         """
         # check order exists
         if order.order_id not in account.frozen_balances:
