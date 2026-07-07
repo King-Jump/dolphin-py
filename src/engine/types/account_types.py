@@ -32,6 +32,8 @@ class UniMarginAccount:
 
     def add_balance(self, asset: str, amount: float):
         with self.lock:
+            if asset not in self.balances:
+                self.balances[asset] = 0
             self.balances[asset] += amount
 
     def sub_balance(self, asset: str, amount: float):
@@ -39,16 +41,24 @@ class UniMarginAccount:
             self.balances[asset] -= amount
     
     def add_frozen_balance(self, order_id: str, asset: str, amount: float):
+        """ 用户铺新订单时，冻结资产
+        """
         with self.lock:
             if order_id not in self.frozen_balances:
-                self.frozen_balances[order_id] = {}
+                self.frozen_balances[order_id] = {
+                    'settle_num': 0
+                }
             self.frozen_balances[order_id][asset] += amount
+            self.balances[asset] -= amount
     
     def sub_frozen_balance(self, order_id: str, asset: str, amount: float) -> bool:
+        """ 订单成交或者撤单后，释放冻结资产
+        """
         with self.lock:
-            if self.free_frozen_balance[order_id][asset] < amount:
+            if self.frozen_balances[order_id][asset] < amount:
                 return False
             self.frozen_balances[order_id][asset] -= amount
+            self.frozen_balances[order_id]['settle_num'] += 1
             return True
 
     def free_frozen_balance(self, order_id: str):

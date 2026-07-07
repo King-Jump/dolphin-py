@@ -86,6 +86,7 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_ask.filled_quantity += match_quantity
+                best_ask.trade_num += 1
 
                 # Check if sell order is fully filled
                 if best_ask.filled_quantity >= best_ask.quantity:
@@ -103,9 +104,13 @@ class MatchingEngine:
             if order.status != OrderStatus.FILLED:
                 if order.filled_quantity > 0:
                     order.status = OrderStatus.PARTIALLY_FILLED
+                    order.trade_num += 1
                 else:
                     order.status = OrderStatus.NEW
                 order_book.add_order(order)
+            else:
+                # full filled
+                order.trade_num += 1
 
         else:  # OrderSide.SELL
             # Sell order matches buy orders
@@ -136,6 +141,7 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity
                 best_bid.filled_quantity += match_quantity
+                best_bid.trade_num += 1
 
                 # Check if buy order is fully filled
                 if best_bid.filled_quantity >= best_bid.quantity:
@@ -153,9 +159,13 @@ class MatchingEngine:
             if order.status != OrderStatus.FILLED:
                 if order.filled_quantity > 0:
                     order.status = OrderStatus.PARTIALLY_FILLED
+                    order.trade_num += 1
                 else:
                     order.status = OrderStatus.NEW
                 order_book.add_order(order)
+            else:
+                # full filled
+                order.trade_num += 1
 
         return trades
 
@@ -198,6 +208,7 @@ class MatchingEngine:
                 # Update order filled quantity
                 order.filled_quantity += match_quantity * best_ask.price
                 best_ask.filled_quantity += match_quantity
+                best_ask.trade_num += 1
 
                 # Check if sell order is fully filled
                 if best_ask.filled_quantity >= best_ask.quantity:
@@ -245,6 +256,7 @@ class MatchingEngine:
 
         # Market orders are marked as filled regardless of whether they are fully executed
         if order.filled_quantity > 0:
+            order.trade_num += 1
             if order.filled_quantity >= order.quantity:
                 order.status = OrderStatus.FILLED
             else:

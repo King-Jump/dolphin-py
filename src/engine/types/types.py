@@ -82,6 +82,7 @@ class Order:
             "isFutures": self.is_futures,
             "filled_quantity": self.filled_quantity,
             "filled_amount": self.filled_amount,
+            "trade_num": self.trade_num,
         }
 
     @staticmethod
@@ -104,6 +105,7 @@ class Order:
         order.status = data["status"]
         order.timestamp = data["timestamp"]
         order.update_timestamp = data["update_timestamp"]
+        order.trade_num = data["trade_num"]
         return order
 
     def get_market(self) -> Market:
@@ -114,7 +116,7 @@ class Order:
             return Market.SPOT_LEVERAGE
         else:
             return Market.FUTURE
-        
+
 # Trade model
 class Trade:
     def __init__(self, trade_id, taker_uid, maker_uid, symbol, price, quantity, buy_order_id, sell_order_id, is_taker_buyer=True):

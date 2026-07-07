@@ -24,7 +24,7 @@ class Funding:
         1. 用户提交限价单后，系统检查现货钱包中可用余额
         2. 若余额充足，立即冻结订单全额对应的资产（买入冻结报价货币USDT，卖出冻结基础货币BTC）
         3. 市价单卖出，传入参数为基础货币数量，并冻结相应基础货币；市价单买入，传入参数为报价货币数量，并冻结相应报价货币
-        4. 买入时：从报价货币（如USDT）中扣手续费
+        4. 买入时：从买入的资产（如BTC）中扣手续费，卖出时：从得到的资产（如USDT）中扣手续费
         """
         # deduplicate
         if order.order_id in account.frozen_balances:
@@ -37,21 +37,15 @@ class Funding:
                 amount = order.quantity
             else:
                 amount = order.price * order.quantity
-            # 因为不知道该订单会以taker还是maker成交，所以按照更高的taker fee冻结
-            fee_rate, fee_decimal = get_fee_rate(Market.SPOT, order.symbol, False, account.uid)
-            fee = round(amount * fee_rate, fee_decimal)
 
-            if amount + fee > account.balances[quote]:
+            if amount > account.balances[quote]:
                 return False, f"Insufficient {quote} balance"
-            account.add_frozen_balance(order.order_id, quote, amount + fee)
-            account.add_frozen_balance(order.order_id, 'fee', fee)
-            account.sub_balance(quote, amount + fee)
+            account.add_frozen_balance(order.order_id, quote, amount)
         else:
             if order.quantity > account.balances[base]:
                 return False, f"Insufficient {base} balance"
 
             account.add_frozen_balance(order.order_id, base, order.quantity)
-            account.sub_balance(base, order.quantity)
 
         account.version += 1
         return True, ""
@@ -60,11 +54,14 @@ class Funding:
         """ 若订单未成交，冻结资产在订单取消或过期后解冻，逐笔冻结和释放，避免逻辑错误
             * 市价单和限价单都有可能被取消，对于市价买单的撤单，解冻的是quote资产
             * 对于买单，还需要释放冻结的fee
-            ** 在执行撤单之前，必须保证该订单所有成交都已经扣费
+            ** 在执行撤单之前，必须保证该订单所有成交都已经扣费，即order.trade_num == account.frozen_balances[order.order_id]['settle_num']
         """
         # check order exists
         if order.order_id not in account.frozen_balances:
             return False, f"order {order.order_id} is not frozen."
+
+        if order.trade_num > account.frozen_balances[order.order_id]['settle_num']:
+            return False, f"order {order.order_id} cannot be cancelled before fully settled."
 
         for asset, leave_quantity in account.frozen_balances[order.order_id].items():
             if leave_quantity:
@@ -89,40 +86,55 @@ class Funding:
             return False
 
         if trade.is_taker_buyer:
-            # move quote from taker to maker, move base from maker to taker
+            # taker买入，USDT划转到maker账户，base coin反之，taker得到base coin，所以taker的fee从base coin中收取
             amount = trade.quantity * trade.price
             if taker: # buyer
                 taker.sub_frozen_balance(trade.buy_order_id, quote, amount)
-                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, False, trade.taker_uid)
-                fee = round(amount * fee_rate, fee_decimal)
-                taker.sub_frozen_balance(trade.buy_order_id, 'fee', fee)
-
                 if taker.frozen_balances[quote] <= 0:
                     # full filled
-                    if taker.frozen_balances['fee'] > 0:
-                        # release fee
-                        taker.add_balance('fee', taker.frozen_balances['fee'])
                     taker.free_frozen_balance(trade.buy_order_id)
-                
-                if base not in taker.balances:
-                    taker.balances[base] = 0
+
+                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, False, trade.taker_uid)
+                fee = round(trade.quantity * fee_rate, fee_decimal)
+                taker.add_balance(base, trade.quantity - fee)
+
+                FEE_ACCOUNT.add_balance(base, fee)
+            if maker: # seller
+                maker.sub_frozen_balance(trade.sell_order_id, base, trade.quantity)
+                if maker.frozen_balances[base] <= 0:
+                    # full filled
+                    maker.free_frozen_balance(trade.sell_order_id)
+
+                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, True, trade.maker_uid)
+                fee = round(amount * fee_rate, fee_decimal)
+                maker.add_balance(quote, amount - fee)
+
+                FEE_ACCOUNT.add_balance(quote, fee)
+        else:
+            # taker是卖方，base转入maker账户，得到quote，fee也从quote中扣除
+            amount = trade.quantity * trade.price
+            if taker:
+                taker.sub_frozen_balance(trade.sell_order_id, base, trade.quantity)
+                if taker.frozen_balances[base] <= 0:
+                    # full filled
+                    taker.free_frozen_balance(trade.sell_order_id)
+
                 fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, False, trade.taker_uid)
                 fee = round(amount * fee_rate, fee_decimal)
-                taker.balances[base] += trade.quantity
-            if maker: # seller
-                maker.frozen_balances[quote] += amount
-                maker.balances[base] -= trade.quantity
-        else:
-            # move quote from maker to taker, move base from taker to maker
-            amount = trade.quantity * trade.price
+                taker.add_balance(quote, amount - fee)
+
+                FEE_ACCOUNT.add_balance(quote, fee)
             if maker:
-                maker.frozen_balances[quote] -= amount
-                if base not in maker.balances:
-                    maker.balances[base] = 0
-                maker.balances[base] += trade.quantity
-            if taker:
-                taker.frozen_balances[quote] += amount
-                taker.balances[base] -= trade.quantity
+                maker.sub_frozen_balance(trade.buy_order_id, quote, amount)
+                if maker.frozen_balances[quote] <= 0:
+                    # full filled
+                    maker.free_frozen_balance(trade.buy_order_id)
+
+                fee_rate, fee_decimal = get_fee_rate(Market.SPOT, trade.symbol, True, trade.maker_uid)
+                fee = round(trade.quantity * fee_rate, fee_decimal)
+                maker.add_balance(base, trade.quantity - fee)
+
+                FEE_ACCOUNT.add_balance(base, fee)
         return True
 
 
