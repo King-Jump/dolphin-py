@@ -1,6 +1,9 @@
 import time
 import threading
 
+class MarginMode:
+    CROSS = 1  # 全仓
+    ISOLATED = 2  # 逐仓
 
 class UniMarginAccount:
     def __init__(self, uid: str, is_inner_maker: bool = False):
@@ -12,9 +15,23 @@ class UniMarginAccount:
         self.uptime = int(1000 * time.time())
 
         self.spot_leverage = 1        # default leverage is 1x
+        self.margin_mode = MarginMode.ISOLATED
+        self.leverage_spot_positions = {}
+        self.perpetual_positions = {}
+        
         self.lock = threading.Lock()
 
         self.air_drop()
+
+    def get_margin_level(self) -> float:
+        """ 保证金水平 = 全仓杠杆账户资产总额 / (负债总额 + 未偿利息)
+        """
+        if self.margin_mode == MarginMode.CROSS:
+            return self.balances['USDT'] / (self.balances['BTC'] * self.spot_leverage)
+        else:
+            return self.balances['USDT'] / (self.balances['BTC'] * self.spot_leverage)
+
+
 
     def air_drop(self):
         with self.lock:
@@ -29,6 +46,13 @@ class UniMarginAccount:
     def set_spot_leverage(self, leverage: float):
         with self.lock:
             self.spot_leverage = leverage
+
+    def get_margin_mode(self) -> MarginMode:
+        return self.margin_mode
+
+    def set_margin_mode(self, margin_mode: MarginMode):
+        with self.lock:
+            self.margin_mode = margin_mode
 
     def add_balance(self, asset: str, amount: float):
         with self.lock:

@@ -137,13 +137,38 @@ class Funding:
                 FEE_ACCOUNT.add_balance(base, fee)
         return True
 
+    def _settle_leverage_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+        """ 用户下单时可选择自动借款模式：系统自动借入订单所需金额完成交易。
+            最大可借金额取决于风险率、初始风险率及用户VIP等级。
+            1. 现货账户即为杠杆账户
+            2. 借币与开仓：自动/手动借入所需币种，下单交易。借款成功即开始计息
+            3. 持仓期间：每小时计提利息，实时监控保证金水平，触发交易限制时只能减仓
+            4. 平仓与还款: 卖出持仓获得资金，先偿还借款本金+利息，剩余部分归用户所有
+            5. 资金转出：剩余资产从杠杆账户转回现货账户     
+        """
+        if order.order_id in account.frozen_balances:
+            return False, f"Order {order.order_id} is already frozen"
 
-    ### RPC interface
+        base, quote = get_base_quote(order.symbol)
+        if order.side == OrderSide.BUY:
+            # 计算订单总金额amount
+            if order.order_type == OrderType.MARKET:
+                amount = order.quantity
+            else:
+                amount = order.quantity * order.price
+
+            # 计算最大可借贷金额
+            max_borrow_amount = min(
+                account.initial_risk_rate,
+                account.initial_risk_rate * (1 - account.risk_rate)
+            )
+
+       ### RPC interface
     def put_spot_order(
         self, uid, symbol, side, order_type, time_in_force, quantity,
         price=None, client_order_id=None, is_futures=False
     ) -> Tuple[bool, Order]:
-        """ RPC interface
+        """ RPC interface for spot order
         """
         if uid not in self.accounts:
             return False, f"Account {uid} is not found"
@@ -189,6 +214,34 @@ class Funding:
         # produce spot new orders to match engine
         FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_NEW, json.dumps([order.to_dict() for order in orders]))
         return True, orders
+
+    def put_leverage_spot_order(
+        self, uid: str, symbol: str, side: str, order_type: str, time_in_force: str,
+        quantity: float, price: float, client_order_id: str
+    ):
+        """ RPC interface for leverage spot order
+        """
+        if uid not in self.accounts:
+            return False, f"Account {uid} is not found"
+        
+        account = self.accounts[uid]
+        if account.is_inner_maker:
+            return False, f"Account {uid} is an internal market maker, leverage API is not allowed"
+
+        order = Order(uid,
+            symbol=symbol, side=side, order_type=order_type,
+            time_in_force=time_in_force, quantity=quantity, price=price,
+            client_order_id=client_order_id,
+        )
+        result, msg = self._settlement_leverage_spot_new(account, order)
+        if not result:
+            return False, msg
+
+        # produce spot new order to match engine
+        FUNDING_MATCH_MQ.produce(MMQTopic.MATCH_IN_SPOT_NEW, json.dumps(order.to_dict()))
+        return True, order
+
+
 
     def cancel_spot_orders(self, uid: str, symbol: str, order_ids: list) -> Tuple[bool, List[Order]]:
         """ batch cancel spot orders, only for internal market maker
