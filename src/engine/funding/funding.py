@@ -7,7 +7,8 @@ import logging
 
 from src.engine.types.types import Market, OrderType, OrderSide, Order, Trade, OrderTimeInForce, OrderStatus
 from src.engine.types.account_types import UniMarginAccount
-from src.common.config.metadata import get_base_quote, get_fee_rate
+from src.common.config.metadata import get_base_quote, get_fee_rate, get_collateral_rate
+from src.common.oracle import get_latest_index_price, update_index_price
 from src.common.mmq import FUNDING_MATCH_MQ, MATCH_FUNDING_MQ, MMQTopic
 #from src.engine.matching.matching import global_spot_engine
 
@@ -19,6 +20,7 @@ class Funding:
         self.exist_order_ids = Bloom(1_000_000, 0.01)
         #self.cancelled_order_ids = Bloom()
 
+    ### settlement for spot trades
     def _settlement_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
         """ 进入撮合前，现货订单资产验证
         1. 用户提交限价单后，系统检查现货钱包中可用余额
@@ -135,35 +137,90 @@ class Funding:
                 maker.add_balance(base, trade.quantity - fee)
 
                 FEE_ACCOUNT.add_balance(base, fee)
+        
+        # 更新指数价格
+        update_index_price(trade.symbol, trade.price)
+
         return True
 
-    def _settle_leverage_spot_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+    ### settlement for leverage spot trades
+    def _settlement_leverage_new(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
         """ 用户下单时可选择自动借款模式：系统自动借入订单所需金额完成交易。
             最大可借金额取决于风险率、初始风险率及用户VIP等级。
-            1. 现货账户即为杠杆账户
-            2. 借币与开仓：自动/手动借入所需币种，下单交易。借款成功即开始计息
+            1. 全仓杠杆账户每个用户只有一个，逐仓杠杠账户则是每个用户、每个symbol一个账户
+            2. 借币与开仓：自动/手动借入所需币种，下单交易。借款成功即开始计息, 按所借资产本身计息（借 USDT 以 USDT 计息，借 BTC 以 BTC 计息）
             3. 持仓期间：每小时计提利息，实时监控保证金水平，触发交易限制时只能减仓
+                - Margin Level = ∑Collateral Value / (Total Liabilities + Outstanding Interest)
+                - 禁止借币 → 追加保证金通知 → 强制平仓
             4. 平仓与还款: 卖出持仓获得资金，先偿还借款本金+利息，剩余部分归用户所有
             5. 资金转出：剩余资产从杠杆账户转回现货账户     
+            6. Interest = Principal Outstanding × Hourly Rate × Hours Outstanding
+                - 按所借资产本身计息（借 USDT 以 USDT 计息，借 BTC 以 BTC 计息）
+                - 单利，非复利，可提前还，按实际借入小时数付息（不足 1 小时仍算 1 小时）
+                - 阶梯利率（Tiered Interest Rate）：按借款量分档，量越大适用不同档利率。
+
+            - 浮动：利率每小时更新，随市场流动性波动，各币种不同。
+            - 阶梯利率（Tiered Interest Rate）：按借款量分档，量越大适用不同档利率。
+            - VIP 折减：按 30 日交易量 + BNB 持仓综合定 VIP 等级（Regular → VIP 9），等级越高利率越低。
+            
+            ML = 逐仓账户总资产价值 / (总负债 + 未偿利息)
+
+            总资产价值 = 该逐仓账户内所有资产的当前市值
+            总负债    = 所有未还借币的当前市值
+            未偿利息  = 本金 × 已借小时数 × 时利率 − 已付利息
+
+            ML = ∑折算后抵押品价值 / (总负债 + 未偿利息)
+            Margin Level = ∑Collateral Value / (Total Liabilities + Outstanding Interest)
+
         """
         if order.order_id in account.frozen_balances:
             return False, f"Order {order.order_id} is already frozen"
 
+        # 计算最大可借贷金额
+        is_isolated = account.get_margin_mode() == MarginMode.ISOLATED
+        # 所有币对的最新价格(指数价格)
+        full_symbol_price = get_latest_index_price()
+        symbol_price = {order.symbol: full_symbol_price[order.symbol]} if is_isolated else full_symbol_price
+        collateral_rate = {} if is_isolated else get_collateral_rate()
+        max_borrow_amount = account.max_borrow_amount(symbol_price, collateral_rate)
+
         base, quote = get_base_quote(order.symbol)
         if order.side == OrderSide.BUY:
-            # 计算订单总金额amount
             if order.order_type == OrderType.MARKET:
+                # for market buy: quantity is the amount of quote currency to buy
                 amount = order.quantity
             else:
-                amount = order.quantity * order.price
+                amount = order.price * order.quantity
 
-            # 计算最大可借贷金额
-            max_borrow_amount = min(
-                account.initial_risk_rate,
-                account.initial_risk_rate * (1 - account.risk_rate)
-            )
+            if amount > max_borrow_amount:
+                return False, f"Insufficient {quote} balance"
+            account.borrow(order.symbol, OrderSide.BUY, amount)
+        else:
+            price = symbol_price.get(order.symbol, 0)
+            if order.quantity * price > max_borrow_amount:
+                return False, f"Insufficient {base} balance"
 
-       ### RPC interface
+            account.borrow(order.symbol, OrderSide.SELL, order.quantity)
+
+        account.version += 1
+        return True, ""
+
+    def _settlement_leverage_spot_cancel(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+        """ 进入撮合前，杠杆订单资产验证
+        """
+        if order.order_id in account.frozen_balances:
+            return False, f"Order {order.order_id} is already frozen"
+        return True
+
+    def _settlement_leverage_spot_trade(self, account: UniMarginAccount, order: Order) -> Tuple[bool, str]:
+        """ 进入撮合前，杠杆订单资产验证
+        """
+        if order.order_id in account.frozen_balances:
+            return False, f"Order {order.order_id} is already frozen"
+        return True
+
+
+    ### RPC interface
     def put_spot_order(
         self, uid, symbol, side, order_type, time_in_force, quantity,
         price=None, client_order_id=None, is_futures=False
@@ -233,7 +290,7 @@ class Funding:
             time_in_force=time_in_force, quantity=quantity, price=price,
             client_order_id=client_order_id,
         )
-        result, msg = self._settlement_leverage_spot_new(account, order)
+        result, msg = self._settlement_leverage_new(account, order)
         if not result:
             return False, msg
 

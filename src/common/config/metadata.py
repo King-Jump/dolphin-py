@@ -19,3 +19,11 @@ def get_fee_rate(market: Market, symbol: str, is_maker: bool, uid: str) -> Tuple
     if is_maker:
         return 0.002, FEE_DECIMAL
     return 0.005, FEE_DECIMAL
+
+def get_collateral_rate() -> dict:
+    """ 获取交易对的抵押率 """
+    return {
+        '90000001': 0.9,
+        '90000002': 0.8,
+        '90000003': 0.5,
+        }
