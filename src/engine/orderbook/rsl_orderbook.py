@@ -3,6 +3,7 @@
     * 使用二维数组压缩存储跳表数据
     * 统一内存管理，避免GC
     * 需要上层保证订单严格时序，即先加入order book的订单时间优先
+    * 注意：skip list的最大层数max_index_level必须满足pow(2, max_index_level) <= max_orders（最大订单数量）
 """
 from src.engine.orderbook.orderbook import OrderBookInterface
 from src.engine.types.types import Order, OrderSide, OrderBookModel
@@ -11,30 +12,6 @@ import threading
 import random
 import time
 
-
-
-class PriceLevel:
-    def __init__(self, price: float, level: int, level_index: int = 0):
-        self.forward = [None] * level  # 指向各层下一个节点的指针列表
-        # forward[0] 指向底层下一个节点，forward[1] 指向第1层下一个节点...
-        self.level_index = level_index  # index in free_levels list
-
-        # price is the key of the skip list
-        self.price = price
-        self.level = level  # 本节点跳表层数
-        self.order_num = 0  # 订单数量
-        self.level_head = LevelOrder(-1)
-        self.level_tail = self.level_head
-
-class LevelOrder:
-    """ 相同价格的订单列表，使用预分配的数组链表，数组默认大小为size，超出size时扩容，数组为0时释放
-    """
-    def __init__(self, order_index: int, order: Order = None):
-        self.prev = None
-        self.next = None
-        # 指向OrderPool.orders数组的索引
-        self.order_index = order_index
-        self.order = order  # 订单对象
 
 class OrderPool:
     """ 订单池，用于存储所有订单，预分配内存避免GC
@@ -72,61 +49,38 @@ class OrderPool:
         self.capacity -= 1
 
 
-class PriceLevelPool:
-    """ 价格挡位对象池，用于存储所有价格挡位，预分配内存避免GC
-        * max_index_level: 跳表最大层数
-        * max_price_level: 价格挡位最大数量
-    """
-    def __init__(self, max_index_level: int, max_price_level: int):
-        self.max_level_size = max_price_level  # max number of nodes
-        self.level_capacity = 0   # number of price levels
-
-        # list of price levels
-        self.free_levels = [PriceLevel(0, max_index_level, i) for i in range(max_price_level)]
-        self.free_levels_ptr = list(range(1, max_price_level+1))
-        self.free_ptr_head = 0
-
-    def is_full(self) -> bool:
-        return self.level_capacity >= self.max_level_size
-
-    def new(self, price: float, level: int) -> Optional[PriceLevel]:
-        if self.level_capacity >= self.max_level_size:
-            return None
-
-        # allocate a new node from free node list
-        node = self.free_levels[self.free_ptr_head]
-        node.price = price
-        node.level_head.prev = None
-        node.level_head.next = None
-        node.level_tail = node.level_head
-        node.order_num = 0
-        node.level = level
-        for i in range(len(node.forward)):
-            node.forward[i] = None
-
-        # remove the node from free node list
-        self.free_ptr_head = self.free_levels_ptr[self.free_ptr_head]
-        self.level_capacity += 1
-        return node
-
-    def free(self, node: PriceLevel) -> Optional[LevelOrder]:
-        # add the node to free node list
-        self.free_levels_ptr[node.level_index] = self.free_ptr_head
-        self.free_ptr_head = node.level_index
-        self.level_capacity -= 1
-
-        node.price = 0
-        return node.level_head.next
-
-
 class SkipList:
-    def __init__(self, max_index_level=16, pN=4, price_level_pool: PriceLevelPool=None, order_pool: OrderPool=None):
+    def __init__(self, max_index_level=16, pN=4, order_pool: OrderPool=None):
+        if pN <= 2:
+            raise ValueError("pN must be greater than 2")
+
         self.max_index_level = max_index_level     # 最大层数限制（防止无限增长）
         self.pN = pN                     # 向上提升的概率1/pN（通常0.5或0.25）
-        self.head = PriceLevel(0, max_index_level, -1)  # 头节点，贯穿所有层
-        self.level = 1                 # 当前跳表的有效最大层数（从1开始）
-        self.price_level_pool = price_level_pool
-        self.order_pool = order_pool
+        self.level = 1                   # 当前跳表的有效最大层数（从1开始）
+        self.order_pool = order_pool     # 订单对象池，用于对象重用，避免GC
+        
+        self._gen_headers()
+
+    def _gen_headers(self):
+        """ 生成所有层的头节点
+            level 0 的header是0
+            level 1 的header是一半
+            level 2 的header是四分之三
+            ...
+        """
+        self.headers = [0] * self.max_index_level
+        self.level_size = [0] * self.max_index_level    # 每一层的索引数量上限
+        self.level_num = [0] * self.max_index_level     # 每一层的索引数量
+
+        start, end = 0, self.max_index_level
+        size = self.max_index_level
+        for lvl in range(1, self.max_index_level):
+            mid = (start + end) // 2
+            self.headers[lvl] = mid
+            start = mid
+
+            size //= 2
+            self.level_size[lvl] = size - 1
 
     def _random_level(self):
         """随机生成新节点的层数（1 到 max_level 之间）"""
@@ -319,48 +273,66 @@ class SkipList:
         return levels
 
 class AskSkipList(SkipList):
-    def __init__(self, max_level=16, pN=4, price_level_pool: PriceLevelPool=None, order_pool: OrderPool=None):
-        super().__init__(max_level, pN, price_level_pool, order_pool)
+    def __init__(self, max_level=16, pN=4, order_pool: OrderPool=None):
+        super().__init__(max_level, pN, order_pool)
 
-    def _compare(self, a: float, b: float) -> int:
+    def _compare(self, a: Order, b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         1. price is ascending
         """
-        if a == b:
-            return 0
-        elif a > b:
+        if a.price == b.price:
+            if a.timestamp < b.timestamp:
+                return -1
+            elif a.timestamp > b.timestamp:
+                return 1
+            else:
+                if a.order_id < b.order_id:
+                    return -1
+                elif a.order_id > b.order_id:
+                    return 1
+                else:
+                    return 0
+        elif a.price > b.price:
             return 1
-        else: # a < b
+        else: # a.price < b.price
             return -1
 
 class BidSkipList(SkipList):
-    def __init__(self, max_level=16, pN=4, price_level_pool: PriceLevelPool=None, order_pool: OrderPool=None):
-        super().__init__(max_level, pN, price_level_pool, order_pool)
+    def __init__(self, max_level=16, pN=4, order_pool: OrderPool=None):
+        super().__init__(max_level, pN, order_pool)
 
-    def _compare(self, a: float, b: float) -> int:
+    def _compare(self, a: Order, b: Order) -> int:
         """ compare two orders, first by price, second by timestamp
         1. price is descending
         """
-        if a == b:
-            return 0
-        elif a > b:
+        if a.price == b.price:
+            if a.timestamp < b.timestamp:
+                return -1
+            elif a.timestamp > b.timestamp:
+                return 1
+            else:
+                if a.order_id < b.order_id:
+                    return -1
+                elif a.order_id > b.order_id:
+                    return 1
+                else:
+                    return 0
+        elif a.price > b.price:
             return -1
-        else: # a < b
+        else: # a.price < b.price
             return 1
 
 
 class OrderBook(OrderBookInterface):
     """ 单币对最多支持max_nodes个订单，超出限制则主动撤最远的订单
     """
-    def __init__(self, symbol, max_index_level=16, max_price_level=1_000, max_orders=20_000, logger=None):
+    def __init__(self, symbol, max_index_level=14, max_price_level=1_000, max_orders=20_000, logger=None):
         self.symbol = symbol
-        self.ask_price_level_pool = PriceLevelPool(max_index_level, max_price_level)
         self.ask_order_pool = OrderPool(max_orders)
-        self.bid_price_level_pool = PriceLevelPool(max_index_level, max_price_level)
         self.bid_order_pool = OrderPool(max_orders)
-
-        self.asks = AskSkipList(max_level=max_index_level, price_level_pool=self.ask_price_level_pool, order_pool=self.ask_order_pool)
-        self.bids = BidSkipList(max_level=max_index_level, price_level_pool=self.bid_price_level_pool, order_pool=self.bid_order_pool)
+        
+        self.asks = AskSkipList(max_level=max_index_level, order_pool=self.ask_order_pool)
+        self.bids = BidSkipList(max_level=max_index_level, order_pool=self.bid_order_pool)
         self.orders = {}
         self.ask_lock = threading.Lock()
         self.bid_lock = threading.Lock()
@@ -375,8 +347,8 @@ class OrderBook(OrderBookInterface):
 
         if order.side == OrderSide.BUY:
             with self.bid_lock:
-                if self.bid_price_level_pool.is_full() or self.bid_order_pool.is_full():
-                    # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
+                if self.bid_order_pool.is_full():
+                    # 超过最大订单数限制，删除最远档位下所有订单
                     removed_orders = self.bids.delete_farest_level()
                     for ro in removed_orders:
                         if ro.order_id in self.orders:
@@ -386,8 +358,8 @@ class OrderBook(OrderBookInterface):
                     return None
         else:
             with self.ask_lock:
-                if self.ask_price_level_pool.is_full() or self.ask_order_pool.is_full():
-                    # 超过最大挡位或最大订单数限制，删除最远档位下所有订单
+                if self.ask_order_pool.is_full():
+                    # 超过最大订单数限制，删除最远档位下所有订单
                     removed_orders = self.asks.delete_farest_level()
                     for ro in removed_orders:
                         if ro.order_id in self.orders:
