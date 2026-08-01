@@ -184,6 +184,8 @@ class Funding:
         collateral_rate = {} if is_isolated else get_collateral_rate()
         max_borrow_amount = account.max_borrow_amount(symbol_price, collateral_rate)
 
+        
+
         base, quote = get_base_quote(order.symbol)
         if order.side == OrderSide.BUY:
             if order.order_type == OrderType.MARKET:

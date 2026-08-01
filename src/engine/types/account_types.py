@@ -12,20 +12,21 @@ class UniMarginAccount:
     def __init__(self, uid: str, is_inner_maker: bool = False):
         self.uid = uid
         self.is_inner_maker = is_inner_maker
-        # spot assets
+
+        # spot balance
         self.balances = {}
         self.frozen_balances = {}
         self.version = 0
         self.uptime = int(1000 * time.time())
 
-        # leverage assets
+        # leverage balance
         self.spot_margin_mode = MarginMode.ISOLATED
         self.spot_leverage = {}
         # 以symbol为key的资产，对于全仓模式，value为资产余额；对于逐仓模式，value为该逐仓资产
         self.leverage_balance = {}
-        self.leverage_positions = {}
+        self.leverage_position = {}
         
-        # perpetual assets
+        # perpetual balance
         self.perpetual_positions = {}
         
         self.lock = threading.Lock()
@@ -64,10 +65,7 @@ class UniMarginAccount:
             last_price = symbol_price.get(symbol, 0)
             # symbolUSDT代表每个symbol逐仓独立的USDT资产
             total_equity = self.leverage_balance.get(f'{symbol}USDT', 0) + last_price * self.leverage_balance.get(symbol, 0)
-            total_borrowed = 0
-            for position in self.leverage_positions.get(symbol, []):
-                # BUY借入USDT，SELL借出BASE coin
-                total_borrowed += position['amt'] if position['side'] == 'BUY' else position['qty'] * last_price
+            total_borrowed = self.leverage_position.get(f'{symbol}USDT', 0) + last_price * self.leverage_position.get(symbol, 0)
             max_borrow_amount = total_equity * (self.spot_leverage.get(symbol, DEFAULT_LEVERAGEAGE) - 1) - total_borrowed
         else:
             # 全仓：最大可借 ≈ 全仓净资产 × (杠杆倍数 − 1) - 已借未还
@@ -76,9 +74,9 @@ class UniMarginAccount:
             for symbol, qty in self.leverage_balance.items():
                 total_equity += symbol_price.get(symbol, 0) * qty * collateral_rate.get(symbol, 0)
 
-            total_borrowed = 0
-            for position in self.leverage_positions.get('ACCOUNT', []):
-                total_borrowed += position['amt'] if position['side'] == 'BUY' else position['qty'] * last_price
+            total_borrowed = self.leverage_position.get('USDT', 0)
+            for symbol, qty in self.leverage_position.items():
+                total_borrowed += qty * symbol_price.get(symbol, 0)
             max_borrow_amount = total_equity * (self.spot_leverage.get('ACCOUNT', DEFAULT_LEVERAGEAGE) - 1) - total_borrowed
 
         return max_borrow_amount
